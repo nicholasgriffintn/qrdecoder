@@ -5,7 +5,8 @@ A tiny progressive web app for decoding `otpauth://` QR codes completely in the 
 - Works offline after the first load
 - Drag & drop images or upload
 - Paste otpauth URIs directly
-- Decodes using the browser's built-in `BarcodeDetector` API for privacy and speed
+- Decodes using the browser's built-in `BarcodeDetector` API when available, with an automatic
+  [`jsQR`](https://github.com/cozmo/jsQR) fallback for other browsers
 - Camera capture for quick scanning on supported devices
 - Blur/reveal toggles for secrets and codes
 - Copy the secret, otpauth URI, and current OTP code to your clipboard

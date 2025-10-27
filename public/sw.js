@@ -15,6 +15,9 @@ const CORE_ASSETS = [
   '/web-app-manifest-512x512.png'
 ];
 
+const FALLBACK_DECODER_URL =
+  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -44,6 +47,31 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  if (request.url === FALLBACK_DECODER_URL) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then((cache) =>
+        cache.match(request).then((cached) => {
+          if (cached) return cached;
+          return fetch(request)
+            .then((response) => {
+              if (response) cache.put(request, response.clone());
+              return response;
+            })
+            .catch(
+              () =>
+                cached ||
+                new Response('', {
+                  status: 504,
+                  statusText: 'Decoder unavailable offline',
+                })
+            );
+        })
+      )
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
