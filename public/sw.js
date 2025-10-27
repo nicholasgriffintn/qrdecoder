@@ -6,17 +6,15 @@ const CORE_ASSETS = [
   '/index.html',
   '/styles.css',
   '/app.js',
+  '/vendor/jsqr@1.4.0.js',
   '/site.webmanifest',
   '/favicon.svg',
   '/favicon.ico',
   '/favicon-96x96.png',
   '/apple-touch-icon.png',
   '/web-app-manifest-192x192.png',
-  '/web-app-manifest-512x512.png'
+  '/web-app-manifest-512x512.png',
 ];
-
-const FALLBACK_DECODER_URL =
-  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -48,36 +46,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  if (request.url === FALLBACK_DECODER_URL) {
-    event.respondWith(
-      caches.open(STATIC_CACHE).then((cache) =>
-        cache.match(request).then((cached) => {
-          if (cached) return cached;
-          return fetch(request)
-            .then((response) => {
-              if (response) cache.put(request, response.clone());
-              return response;
-            })
-            .catch(
-              () =>
-                cached ||
-                new Response('', {
-                  status: 504,
-                  statusText: 'Decoder unavailable offline',
-                })
-            );
-        })
-      )
-    );
-    return;
-  }
-
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
-    );
+    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
     return;
   }
 
@@ -86,7 +58,11 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          if (
+            !response ||
+            response.status !== 200 ||
+            response.type !== 'basic'
+          ) {
             return response;
           }
           const clone = response.clone();
@@ -97,7 +73,10 @@ self.addEventListener('fetch', (event) => {
           if (request.destination === 'document') {
             return caches.match('/index.html');
           }
-          return new Response('', { status: 503, statusText: 'Service Unavailable' });
+          return new Response('', {
+            status: 503,
+            statusText: 'Service Unavailable',
+          });
         });
     })
   );

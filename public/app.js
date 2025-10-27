@@ -41,8 +41,7 @@ let cameraModalVisible = false;
 let barcodeDetectorAvailable = false;
 let fallbackDecoderPromise = null;
 
-const FALLBACK_DECODER_URL =
-  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+const FALLBACK_DECODER_URL = '/vendor/jsqr@1.4.0.js';
 
 function loadFallbackDecoder() {
   if (window.jsQR) return Promise.resolve(window.jsQR);
@@ -300,9 +299,7 @@ function updateCodeVisibility() {
   fileUploadEnabled = true;
 
   if (bdNote) {
-    bdNote.textContent = hasBD
-      ? '(or drag & drop)'
-      : '(uses portable fallback)';
+    bdNote.textContent = '(or drag & drop)';
   }
 
   fileInput.disabled = false;
@@ -313,20 +310,15 @@ function updateCodeVisibility() {
   previewContainer?.classList.remove('hidden');
   previewGroup?.classList.remove('hidden');
 
-  if (supportWarning) {
-    supportWarning.textContent = hasBD
-      ? 'Using the built-in BarcodeDetector for fast, local decoding.'
-      : 'BarcodeDetector is unavailable. Falling back to an embedded decoder — scans may take a little longer.';
+  if (supportWarning && !hasBD) {
+    supportWarning.textContent =
+      'BarcodeDetector is unavailable. Falling back to an embedded decoder — scans may take a little longer.';
     supportWarning.classList.toggle('hidden', hasBD);
   }
 
   updateCameraAvailability();
 
-  setStatus(
-    hasBD
-      ? 'Drop a QR, scan with camera, or paste a URI to begin!'
-      : 'Drop a QR, scan with camera, or paste a URI to begin! (Fallback decoder)'
-  );
+  setStatus('Drop a QR, scan with camera, or paste a URI to begin!');
 
   updatePreviewVisibility();
   updateCodeVisibility();
