@@ -35,6 +35,7 @@ const otpAlgoEl = $('algo');
 const otpDigitsEl = $('digits');
 const otpPeriodEl = $('period');
 const otpCounterEl = $('counter');
+const detailsPanel = $('details-panel');
 const otpDetails = $('otp-details');
 const genericDetails = $('generic-details');
 const genericFormatEl = $('generic-format');
@@ -1447,6 +1448,7 @@ function render() {
 
   const hideCodePanel = !isOtp;
   codePanel?.classList.toggle('hidden', hideCodePanel);
+  detailsPanel?.classList.toggle('panel-full', hideCodePanel);
 }
 
 async function refreshCodeLoop() {

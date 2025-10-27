@@ -356,6 +356,10 @@ input[type='text'].field-invalid {
   padding: 16px;
 }
 
+.panel-full {
+  grid-column: 1 / -1;
+}
+
 .secret {
   display: flex;
   flex-direction: column;
