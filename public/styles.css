@@ -68,11 +68,12 @@ h1 {
 }
 
 .banner {
+  font-size: 0.8rem;
   margin: 12px 0 0;
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid var(--accent);
-  background: rgba(124, 140, 255, 0.16);
+  border: 1px solid var(--border);
+  background: var(--background);
   color: var(--text);
 }
 
@@ -251,6 +252,10 @@ input[type='text'].field-invalid {
   gap: 4px;
 }
 
+.panel .field + .field {
+  margin-top: 12px;
+}
+
 .label-row {
   display: flex;
   align-items: center;
@@ -274,6 +279,62 @@ input[type='text'].field-invalid {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
     'Liberation Mono', monospace;
+}
+
+.detail-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(15, 16, 22, 0.8);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-list.is-placeholder {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail-row:first-child {
+  padding-top: 0;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.detail-value {
+  color: var(--text);
+  font-size: 15px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.generic-raw {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #0f1016;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
 }
 
 .cols {

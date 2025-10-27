@@ -40,13 +40,12 @@
             <button id="open-camera" class="btn full" type="button">Scan with Camera</button>
           </div>
           <p id="no-upload" class="muted small hidden" style="margin-top: 8px">
-            QR decoding isn&rsquo;t available in this browser. Paste an otpauth URI instead.
+            QR decoding isn&rsquo;t available in this browser. Paste the QR content instead.
           </p>
           <div class="row" style="margin-top: 12px">
             <div class="field" style="flex: 1">
-              <div class="label">Or paste an otpauth URI</div>
-              <input id="uri" type="text"
-                placeholder="otpauth://totp/Example:alice@acme.com?secret=JBSW...&issuer=Acme" />
+              <div class="label">Or paste QR content</div>
+              <input id="uri" type="text" placeholder="otpauth://totp/Example... or WIFI:T:WPA;S:MyNet;P:secret" />
             </div>
             <button id="parse" type="button">Parse</button>
           </div>
@@ -63,54 +62,72 @@
         </div>
       </div>
 
-      <div id="support-warning" class="banner hidden" role="status">
-        BarcodeDetector is unavailable. Falling back to a portable decoder — scans may be slower.
-      </div>
+      <div id="support-warning" class="banner hidden" role="status"></div>
 
       <div class="cols" style="margin-top: 18px">
         <div class="panel">
           <h3 style="margin: 0 0 10px">Details</h3>
-          <div class="field">
-            <div class="label">Type</div>
-            <div id="type">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Label</div>
-            <div id="label">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Issuer</div>
-            <div id="issuer">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Algorithm</div>
-            <div id="algo">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Digits</div>
-            <div id="digits">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Period</div>
-            <div id="period">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Counter</div>
-            <div id="counter">—</div>
-          </div>
-          <div class="field">
-            <div class="label">Secret</div>
-            <div class="secret">
-              <span id="secret" class="secret-value mono">—</span>
-              <div class="secret-actions">
-                <button id="reveal" class="btn small" type="button" aria-controls="secret"
-                  aria-pressed="false">Reveal secret</button>
-                <button id="copy-secret" class="btn small" type="button">Copy</button>
+          <div id="otp-details" class="hidden">
+            <div class="field">
+              <div class="label">Type</div>
+              <div id="type">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Label</div>
+              <div id="label">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Issuer</div>
+              <div id="issuer">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Algorithm</div>
+              <div id="algo">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Digits</div>
+              <div id="digits">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Period</div>
+              <div id="period">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Counter</div>
+              <div id="counter">—</div>
+            </div>
+            <div class="field">
+              <div class="label">Secret</div>
+              <div class="secret">
+                <span id="secret" class="secret-value mono">—</span>
+                <div class="secret-actions">
+                  <button id="reveal" class="btn small" type="button" aria-controls="secret" aria-pressed="false">Reveal
+                    secret</button>
+                  <button id="copy-secret" class="btn small" type="button">Copy</button>
+                </div>
               </div>
+            </div>
+            </div>
+            <div id="generic-details" class="hidden">
+              <div class="field">
+                <div class="label">Format</div>
+                <div id="generic-format">—</div>
+              </div>
+              <div class="field">
+                <div class="label">Summary</div>
+                <div id="generic-summary">—</div>
+              </div>
+              <div class="field">
+                <div class="label">Details</div>
+                <div id="generic-details-list" class="detail-list is-placeholder">No structured fields detected.</div>
+              </div>
+              <div class="field">
+                <div class="label">Raw payload</div>
+                <pre id="generic-raw" class="generic-raw mono">—</pre>
             </div>
           </div>
           <div class="row small" style="margin-top: 8px">
-            <button id="copy-uri" class="btn small" type="button">Copy otpauth URI</button>
+            <button id="copy-uri" class="btn small" type="button">Copy payload</button>
           </div>
         </div>
 
@@ -135,14 +152,13 @@
         </div>
       </div>
       <footer class="footer">
-        <a class="muted small" href="https://github.com/nicholasgriffintn/qrdecoder" target="_blank"
-          rel="noopener">View on GitHub</a>
+        <a class="muted small" href="https://github.com/nicholasgriffintn/qrdecoder" target="_blank" rel="noopener">View
+          on GitHub</a>
       </footer>
     </div>
   </div>
 
-  <div id="camera-modal" class="camera-modal hidden" role="dialog" aria-modal="true"
-    aria-labelledby="camera-title">
+  <div id="camera-modal" class="camera-modal hidden" role="dialog" aria-modal="true" aria-labelledby="camera-title">
     <div class="camera-content">
       <div class="camera-header">
         <h2 id="camera-title">Scan a QR Code</h2>

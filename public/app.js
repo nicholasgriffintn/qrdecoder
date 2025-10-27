@@ -28,6 +28,20 @@ const codeOverlay = $('code-overlay');
 const revealCodeBtn = $('reveal-code');
 const countdownEl = $('countdown');
 const toast = $('toast');
+const otpTypeEl = $('type');
+const otpLabelEl = $('label');
+const otpIssuerEl = $('issuer');
+const otpAlgoEl = $('algo');
+const otpDigitsEl = $('digits');
+const otpPeriodEl = $('period');
+const otpCounterEl = $('counter');
+const otpDetails = $('otp-details');
+const genericDetails = $('generic-details');
+const genericFormatEl = $('generic-format');
+const genericSummaryEl = $('generic-summary');
+const genericDetailsListEl = $('generic-details-list');
+const genericRawEl = $('generic-raw');
+const codePanel = codeEl?.closest('.panel') || null;
 
 let parsed = null;
 let showSecret = false;
@@ -54,6 +68,8 @@ let lastCameraScanValue = '';
 let lastCameraScanResetTimer = null;
 
 const FALLBACK_DECODER_URL = '/vendor/jsqr@1.4.0.js';
+const EMPTY_VALUE = '—';
+const GENERIC_DETAILS_PLACEHOLDER = 'No structured fields detected.';
 
 function loadFallbackDecoder() {
   if (window.jsQR) return Promise.resolve(window.jsQR);
@@ -218,7 +234,7 @@ function startCameraScan() {
           lastCameraScanValue = '';
           lastCameraScanResetTimer = null;
         }, 2200);
-        const handled = handleDecodedOtp(text, {
+        const handled = handleDecodedPayload(text, {
           message: 'QR scanned ✔',
           previewCanvas: cameraScanCanvas,
         });
@@ -366,9 +382,31 @@ function updateCodeVisibility(options = {}) {
   const { updateText = true } = options;
   if (!codeEl) return;
 
-  if (!parsed || !currentCode) {
+  const isOtp = parsed?.format === 'OTP';
+
+  if (!isOtp) {
     if (updateText) {
-      codeEl.textContent = parsed ? '———' : '— — — — — —';
+      codeEl.textContent = '— — — — — —';
+    }
+    codeEl.classList.remove('is-blurred');
+    codeOverlay?.classList.add('hidden');
+    codeOverlay?.setAttribute('aria-hidden', 'true');
+    revealCodeBtn?.classList.add('hidden');
+    if (revealCodeBtn) {
+      revealCodeBtn.textContent = 'Reveal code';
+      revealCodeBtn.setAttribute('aria-pressed', 'false');
+    }
+    setButtonCallout(revealCodeBtn, false);
+    setButtonCallout(copyCodeBtn, false);
+    if (copyCodeBtn) copyCodeBtn.disabled = true;
+    lastHighlightedCode = '';
+    codeEl.setAttribute('aria-live', 'off');
+    return;
+  }
+
+  if (!currentCode) {
+    if (updateText) {
+      codeEl.textContent = '———';
     }
     codeEl.classList.remove('is-blurred');
     codeOverlay?.classList.add('hidden');
@@ -405,7 +443,9 @@ function updateCodeVisibility(options = {}) {
   }
   codeEl.setAttribute(
     'aria-live',
-    !hidden && parsed?.type === 'TOTP' ? 'polite' : 'off'
+    !hidden && parsed?.format === 'OTP' && parsed?.type === 'TOTP'
+      ? 'polite'
+      : 'off'
   );
 
   if (copyCodeBtn) {
@@ -450,12 +490,11 @@ function updateCodeVisibility(options = {}) {
   if (supportWarning && !hasBD) {
     supportWarning.textContent =
       'BarcodeDetector is unavailable. Falling back to an embedded decoder — scans may take a little longer.';
-    supportWarning.classList.toggle('hidden', hasBD);
   }
 
   updateCameraAvailability();
 
-  setStatus('Drop a QR, scan with camera, or paste a URI to begin!');
+  setStatus('Drop a QR, scan with camera, or paste content to begin!');
 
   updatePreviewVisibility();
   updateCodeVisibility();
@@ -555,6 +594,507 @@ function parseOtpAuth(uri) {
   } catch (e) {
     return { error: e.message || 'Failed to parse otpauth URI' };
   }
+}
+
+function safeDecode(value) {
+  if (typeof value !== 'string') return value;
+  try {
+    return decodeURIComponent(value.replace(/\+/g, '%20'));
+  } catch {
+    return value;
+  }
+}
+
+function parseWifiPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.toUpperCase().startsWith('WIFI:')) return null;
+  const body = trimmed.slice(5);
+  const segments = [];
+  let current = '';
+  let escaping = false;
+  for (const ch of body) {
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaping = true;
+      continue;
+    }
+    if (ch === ';') {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current) segments.push(current);
+  const params = {};
+  for (const segment of segments) {
+    if (!segment) continue;
+    const [key, ...valueParts] = segment.split(':');
+    if (!key) continue;
+    const value = valueParts.join(':');
+    params[key.toUpperCase()] = value;
+  }
+  const unescapeWifi = (value = '') =>
+    value.replace(/\\([\\;,":])/g, '$1').trim();
+  const ssid = unescapeWifi(params.S || '');
+  const password = unescapeWifi(params.P || '');
+  const security = (params.T || 'nopass').toUpperCase();
+  const hiddenFlag = (params.H || '').toLowerCase();
+  const hidden =
+    hiddenFlag === 'true' ||
+    hiddenFlag === '1' ||
+    hiddenFlag === 'yes' ||
+    hiddenFlag === 'y';
+  return {
+    format: 'WiFi',
+    raw,
+    title: ssid || 'Wi-Fi network',
+    summary: ssid ? `Wi-Fi network ${ssid}` : 'Wi-Fi network',
+    wifi: {
+      ssid,
+      password,
+      security,
+      hidden,
+    },
+    fields: [
+      { label: 'SSID', value: ssid || EMPTY_VALUE },
+      { label: 'Security', value: security || 'NOPASS' },
+      { label: 'Password', value: password || EMPTY_VALUE },
+      { label: 'Hidden', value: hidden ? 'Yes' : 'No' },
+    ],
+  };
+}
+
+function parseMeCardPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.toUpperCase().startsWith('MECARD:')) return null;
+  const body = trimmed.slice(7);
+  const segments = [];
+  let current = '';
+  let escaping = false;
+  for (const ch of body) {
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaping = true;
+      continue;
+    }
+    if (ch === ';') {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current) segments.push(current);
+  const params = {};
+  for (const segment of segments) {
+    if (!segment) continue;
+    const [key, ...valueParts] = segment.split(':');
+    if (!key) continue;
+    const keyUpper = key.toUpperCase();
+    const value = valueParts.join(':').trim();
+    if (!value) continue;
+    if (!params[keyUpper]) {
+      params[keyUpper] = [];
+    }
+    params[keyUpper].push(value);
+  }
+  const pick = (key) => (params[key]?.[0] ? safeDecode(params[key][0]) : '');
+  const name = pick('N');
+  const org = pick('ORG');
+  const title = pick('TITLE');
+  const note = pick('NOTE');
+  const email = pick('EMAIL');
+  const phoneValues = (params.TEL || []).map((v) => safeDecode(v));
+  const addr = pick('ADR')
+    .replace(/;/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const summaryPieces = [name, org].filter(Boolean);
+  const summary = summaryPieces.length
+    ? `Contact ${summaryPieces.join(' - ')}`
+    : 'Contact';
+  const fields = [];
+  if (name) fields.push({ label: 'Name', value: name });
+  if (org) fields.push({ label: 'Organization', value: org });
+  if (title) fields.push({ label: 'Title', value: title });
+  phoneValues.forEach((value, idx) =>
+    fields.push({
+      label: phoneValues.length > 1 ? `Phone ${idx + 1}` : 'Phone',
+      value,
+    })
+  );
+  if (email) fields.push({ label: 'Email', value: email });
+  if (addr) fields.push({ label: 'Address', value: addr });
+  if (note) fields.push({ label: 'Note', value: safeDecode(note) });
+  return {
+    format: 'Contact',
+    raw,
+    title: name || org || 'Contact',
+    summary,
+    contact: {
+      name,
+      organization: org,
+      title,
+      phones: phoneValues,
+      emails: email ? [email] : [],
+      address: addr,
+      note,
+    },
+    fields,
+  };
+}
+
+function parseVCardPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!/^BEGIN:VCARD/i.test(trimmed)) return null;
+  const lines = trimmed.split(/\r?\n/);
+  const unfolded = [];
+  for (const line of lines) {
+    if (!line) continue;
+    if (/^[ \t]/.test(line) && unfolded.length) {
+      unfolded[unfolded.length - 1] += line.replace(/^[ \t]+/, '');
+    } else {
+      unfolded.push(line);
+    }
+  }
+  const data = {
+    phones: [],
+    emails: [],
+    urls: [],
+  };
+  for (const line of unfolded) {
+    const [lhs, ...rhsParts] = line.split(':');
+    if (!lhs || !rhsParts.length) continue;
+    const value = safeDecode(rhsParts.join(':').trim());
+    const key = lhs.toUpperCase();
+    if (key.startsWith('FN')) data.fn = value;
+    else if (key === 'N') data.n = value.replace(/;/g, ' ').trim();
+    else if (key.startsWith('ORG')) data.org = value;
+    else if (key.startsWith('TITLE')) data.title = value;
+    else if (key.startsWith('TEL')) data.phones.push(value);
+    else if (key.startsWith('EMAIL')) data.emails.push(value);
+    else if (key.startsWith('ADR'))
+      data.address = value
+        .replace(/;/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    else if (key.startsWith('URL')) data.urls.push(value);
+    else if (key.startsWith('NOTE')) data.note = value;
+  }
+  const name = data.fn || data.n || '';
+  const fields = [];
+  if (name) fields.push({ label: 'Name', value: name });
+  if (data.org) fields.push({ label: 'Organization', value: data.org });
+  if (data.title) fields.push({ label: 'Title', value: data.title });
+  data.phones.forEach((value, idx) =>
+    fields.push({
+      label: data.phones.length > 1 ? `Phone ${idx + 1}` : 'Phone',
+      value,
+    })
+  );
+  data.emails.forEach((value, idx) =>
+    fields.push({
+      label: data.emails.length > 1 ? `Email ${idx + 1}` : 'Email',
+      value,
+    })
+  );
+  if (data.address) fields.push({ label: 'Address', value: data.address });
+  data.urls.forEach((value, idx) =>
+    fields.push({
+      label: data.urls.length > 1 ? `URL ${idx + 1}` : 'URL',
+      value,
+    })
+  );
+  if (data.note) fields.push({ label: 'Note', value: data.note });
+  const summaryParts = [name, data.org].filter(Boolean);
+  return {
+    format: 'Contact',
+    raw,
+    title: name || data.org || 'Contact card',
+    summary: summaryParts.length
+      ? `Contact ${summaryParts.join(' - ')}`
+      : 'Contact card',
+    contact: {
+      name,
+      organization: data.org || '',
+      title: data.title || '',
+      phones: data.phones,
+      emails: data.emails,
+      address: data.address || '',
+      note: data.note || '',
+      urls: data.urls,
+    },
+    fields,
+  };
+}
+
+function parseEventPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  let block = null;
+  if (/^BEGIN:VEVENT/i.test(trimmed)) {
+    block = trimmed;
+  } else if (/^BEGIN:VCALENDAR/i.test(trimmed)) {
+    const match = trimmed.match(/BEGIN:VEVENT[\s\S]*END:VEVENT/i);
+    if (match) block = match[0];
+  }
+  if (!block) return null;
+  const lines = block.split(/\r?\n/);
+  const unfolded = [];
+  for (const line of lines) {
+    if (!line) continue;
+    if (/^[ \t]/.test(line) && unfolded.length) {
+      unfolded[unfolded.length - 1] += line.replace(/^[ \t]+/, '');
+    } else {
+      unfolded.push(line);
+    }
+  }
+  const event = {};
+  for (const line of unfolded) {
+    const [lhs, ...rhsParts] = line.split(':');
+    if (!lhs || !rhsParts.length) continue;
+    const key = lhs.toUpperCase();
+    const value = safeDecode(rhsParts.join(':').trim());
+    if (key.startsWith('SUMMARY')) event.summary = value;
+    else if (key.startsWith('LOCATION')) event.location = value;
+    else if (key.startsWith('DTSTART')) event.start = value;
+    else if (key.startsWith('DTEND')) event.end = value;
+    else if (key.startsWith('DESCRIPTION')) event.description = value;
+  }
+  const fields = [];
+  if (event.summary) fields.push({ label: 'Summary', value: event.summary });
+  if (event.location) fields.push({ label: 'Location', value: event.location });
+  if (event.start) fields.push({ label: 'Starts', value: event.start });
+  if (event.end) fields.push({ label: 'Ends', value: event.end });
+  if (event.description)
+    fields.push({ label: 'Description', value: event.description });
+  if (!fields.length) return null;
+  return {
+    format: 'Calendar Event',
+    raw,
+    title: event.summary || 'Calendar event',
+    summary: event.summary || 'Calendar event',
+    event,
+    fields,
+  };
+}
+
+function parseGeoPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.toLowerCase().startsWith('geo:')) return null;
+  const body = trimmed.slice(4);
+  const [coordPart, query = ''] = body.split('?');
+  const [latStr, lngStr, altStr] = coordPart.split(',');
+  const lat = Number.parseFloat(latStr);
+  const lng = Number.parseFloat(lngStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const altitude =
+    altStr && Number.isFinite(Number.parseFloat(altStr))
+      ? Number.parseFloat(altStr)
+      : null;
+  const params = new URLSearchParams(query);
+  const q = params.get('q') || '';
+  const summary =
+    q || `Coordinates ${lat.toFixed(5)}, ${lng.toFixed(5)}`.trim();
+  const fields = [
+    { label: 'Latitude', value: String(lat) },
+    { label: 'Longitude', value: String(lng) },
+  ];
+  if (altitude !== null) {
+    fields.push({ label: 'Altitude', value: String(altitude) });
+  }
+  if (q) fields.push({ label: 'Query', value: q });
+  return {
+    format: 'Geo',
+    raw,
+    title: 'Geolocation',
+    summary,
+    geo: { lat, lng, altitude, query: q },
+    fields,
+  };
+}
+
+function parseMailPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.toLowerCase().startsWith('mailto:')) return null;
+  const [, rest] = trimmed.split(':', 2);
+  const [addrPart, queryPart = ''] = rest.split('?', 2);
+  const to = addrPart
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const params = new URLSearchParams(queryPart);
+  const cc = params.get('cc') || '';
+  const bcc = params.get('bcc') || '';
+  const subject = safeDecode(params.get('subject') || '');
+  const body = safeDecode(params.get('body') || '');
+  const fields = [];
+  if (to.length) {
+    fields.push({
+      label: to.length > 1 ? 'To (comma separated)' : 'To',
+      value: to.join(', '),
+    });
+  }
+  if (cc) fields.push({ label: 'CC', value: safeDecode(cc) });
+  if (bcc) fields.push({ label: 'BCC', value: safeDecode(bcc) });
+  if (subject) fields.push({ label: 'Subject', value: subject });
+  if (body) fields.push({ label: 'Body', value: body });
+  return {
+    format: 'Email',
+    raw,
+    title: 'Email link',
+    summary: subject
+      ? `Email: ${subject}`
+      : to.length
+      ? `Email ${to.join(', ')}`
+      : 'Email link',
+    email: {
+      to,
+      subject,
+      body,
+      cc: cc
+        ? cc
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+        : [],
+      bcc: bcc
+        ? bcc
+            .split(',')
+            .map((v) => v.trim())
+            .filter(Boolean)
+        : [],
+    },
+    fields,
+  };
+}
+
+function parseSmsPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  const prefixMatch = trimmed.match(/^(SMSTO|SMS):/i);
+  if (!prefixMatch) return null;
+  const [, rest] = trimmed.split(':', 2);
+  const [toPart = '', messagePart = ''] = rest.split(':', 2);
+  const to = toPart
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const message = safeDecode(messagePart || '');
+  const fields = [];
+  if (to.length) {
+    fields.push({
+      label: to.length > 1 ? 'Recipients' : 'Recipient',
+      value: to.join(', '),
+    });
+  }
+  if (message) fields.push({ label: 'Message', value: message });
+  return {
+    format: 'SMS',
+    raw,
+    title: 'SMS message',
+    summary: to.length ? `SMS to ${to.join(', ')}` : 'SMS message',
+    sms: { to, message },
+    fields,
+  };
+}
+
+function parseUrlPayload(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    const fields = [{ label: 'URL', value: url.href }];
+    if (url.username || url.password) {
+      fields.push({
+        label: 'Credentials',
+        value: `${url.username}:${url.password}`,
+      });
+    }
+    if (url.search) fields.push({ label: 'Query', value: url.search });
+    if (url.hash) fields.push({ label: 'Fragment', value: url.hash });
+    return {
+      format: 'URL',
+      raw,
+      title: url.hostname || url.href,
+      summary: url.href,
+      url: url.href,
+      fields,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parsePlainTextPayload(raw) {
+  if (typeof raw !== 'string') {
+    return {
+      format: 'Text',
+      raw: String(raw),
+      title: 'Text payload',
+      summary: String(raw),
+      fields: [],
+      text: String(raw),
+    };
+  }
+  const trimmed = raw.trim();
+  const summaryLine = trimmed.split(/\r?\n/)[0] || '';
+  const summary = summaryLine.slice(0, 140) || 'Text payload';
+  return {
+    format: 'Text',
+    raw,
+    title: 'Text payload',
+    summary,
+    fields: [],
+    text: trimmed,
+  };
+}
+
+function parseQrContent(text) {
+  if (text == null) return { error: 'QR payload is empty' };
+  const raw = String(text);
+  const trimmed = raw.trim();
+  if (!trimmed) return { error: 'QR payload is empty' };
+
+  if (trimmed.toLowerCase().startsWith('otpauth://')) {
+    const otp = parseOtpAuth(trimmed);
+    if (otp.error) return { error: otp.error };
+    return { format: 'OTP', raw, ...otp, original: otp.original || raw };
+  }
+
+  const parsers = [
+    parseWifiPayload,
+    parseMeCardPayload,
+    parseVCardPayload,
+    parseEventPayload,
+    parseGeoPayload,
+    parseMailPayload,
+    parseSmsPayload,
+    parseUrlPayload,
+  ];
+
+  for (const fn of parsers) {
+    const result = fn(raw);
+    if (result) return { ...result, original: raw };
+  }
+
+  const fallback = parsePlainTextPayload(raw);
+  return { ...fallback, original: raw };
 }
 
 function base32ToBytes(b32) {
@@ -663,6 +1203,7 @@ function applyParsed(result, message) {
 
 function resetParsedWithError(message) {
   parsed = null;
+  showSecret = false;
   render();
   refreshCodeLoop();
   setStatus(message);
@@ -678,7 +1219,7 @@ function resetParsedWithError(message) {
 async function handleFile(file) {
   if (!file) return;
   if (!fileUploadEnabled) {
-    setStatus('QR decoding is unavailable. Paste an otpauth URI instead.');
+    setStatus('QR decoding is unavailable. Paste the QR content instead.');
     return;
   }
   setPreviewFromFile(file);
@@ -686,23 +1227,18 @@ async function handleFile(file) {
   setStatus('Decoding QR…');
   try {
     const text = await decodeQRFromImage(file);
-    if (!text.startsWith('otpauth://')) {
-      throw new Error('QR is not an otpauth URI');
-    }
-    const parsedResult = parseOtpAuth(text);
+    const parsedResult = parseQrContent(text);
     if (parsedResult.error) throw new Error(parsedResult.error);
     applyParsed(parsedResult, 'QR decoded ✔');
+    if (uriInput)
+      uriInput.value = parsedResult.original || parsedResult.raw || text;
   } catch (err) {
     resetParsedWithError(err.message || 'Failed to decode');
   }
 }
 
-function handleDecodedOtp(text, { message, previewCanvas } = {}) {
-  if (!text.startsWith('otpauth://')) {
-    setStatus('QR is not an otpauth URI');
-    return false;
-  }
-  const parsedResult = parseOtpAuth(text);
+function handleDecodedPayload(text, { message, previewCanvas } = {}) {
+  const parsedResult = parseQrContent(text);
   if (parsedResult.error) {
     setStatus(parsedResult.error);
     return false;
@@ -723,7 +1259,8 @@ function handleDecodedOtp(text, { message, previewCanvas } = {}) {
   }
 
   applyParsed(parsedResult, message || 'QR decoded ✔');
-  if (uriInput) uriInput.value = parsedResult.original || text;
+  if (uriInput)
+    uriInput.value = parsedResult.original || parsedResult.raw || text;
   setUriValidity('');
   return true;
 }
@@ -746,18 +1283,12 @@ async function copyToClipboard(text, successMessage) {
 function attemptParseFromInput() {
   const value = uriInput?.value.trim();
   if (!value) {
-    setUriValidity('Enter an otpauth URI to parse.');
-    setStatus('Enter an otpauth URI to parse.');
+    setUriValidity('Enter QR content to parse.');
+    setStatus('Enter QR content to parse.');
     uriInput?.focus();
     return;
   }
-  if (!value.toLowerCase().startsWith('otpauth://')) {
-    setUriValidity('URI must start with otpauth://');
-    setStatus('URI must start with otpauth://');
-    uriInput?.focus();
-    return;
-  }
-  const parsedResult = parseOtpAuth(value);
+  const parsedResult = parseQrContent(value);
   if (parsedResult.error) {
     setUriValidity(parsedResult.error);
     resetParsedWithError(parsedResult.error);
@@ -766,7 +1297,10 @@ function attemptParseFromInput() {
   }
   setUriValidity('');
   clearPreview();
-  applyParsed(parsedResult, 'URI parsed ✔');
+  applyParsed(parsedResult, 'Content parsed ✔');
+  if (uriInput) {
+    uriInput.value = parsedResult.original || parsedResult.raw || value;
+  }
 }
 
 function setUriValidity(message) {
@@ -781,30 +1315,138 @@ function setUriValidity(message) {
 }
 
 function render() {
-  $('type').textContent = parsed?.type || '—';
-  $('label').textContent = parsed?.label || '—';
-  $('issuer').textContent = parsed?.issuer || '—';
-  $('algo').textContent = parsed?.algo || '—';
-  $('digits').textContent = parsed?.digits ?? '—';
-  $('period').textContent = parsed?.type === 'TOTP' ? parsed.period : '—';
-  $('counter').textContent = parsed?.type === 'HOTP' ? parsed.counter : '—';
+  const hasParsed = !!parsed;
+  const isOtp = parsed?.format === 'OTP';
+  const showOtpSection = isOtp;
+  const showGenericSection = !isOtp;
+
+  otpDetails?.classList.toggle('hidden', !showOtpSection);
+  genericDetails?.classList.toggle('hidden', !showGenericSection);
+
+  if (otpTypeEl) otpTypeEl.textContent = isOtp ? parsed.type : EMPTY_VALUE;
+  if (otpLabelEl)
+    otpLabelEl.textContent = isOtp ? parsed.label || EMPTY_VALUE : EMPTY_VALUE;
+  if (otpIssuerEl)
+    otpIssuerEl.textContent = isOtp
+      ? parsed.issuer || EMPTY_VALUE
+      : EMPTY_VALUE;
+  if (otpAlgoEl)
+    otpAlgoEl.textContent = isOtp ? parsed.algo || EMPTY_VALUE : EMPTY_VALUE;
+  if (otpDigitsEl)
+    otpDigitsEl.textContent =
+      isOtp && typeof parsed.digits === 'number'
+        ? String(parsed.digits)
+        : EMPTY_VALUE;
+  if (otpPeriodEl)
+    otpPeriodEl.textContent =
+      isOtp && parsed.type === 'TOTP' ? String(parsed.period) : EMPTY_VALUE;
+  if (otpCounterEl)
+    otpCounterEl.textContent =
+      isOtp && parsed.type === 'HOTP'
+        ? String(parsed.counter ?? EMPTY_VALUE)
+        : EMPTY_VALUE;
+
   if (secretValueEl) {
-    secretValueEl.textContent = parsed
-      ? showSecret
-        ? parsed.secretB32
-        : '•'.repeat(Math.min(parsed.secretB32.length, 24))
-      : '—';
+    if (isOtp && parsed?.secretB32) {
+      const secret = parsed.secretB32;
+      secretValueEl.textContent = showSecret
+        ? secret
+        : '•'.repeat(Math.min(secret.length, 24));
+    } else {
+      secretValueEl.textContent = EMPTY_VALUE;
+    }
   }
+
   if (revealSecretBtn) {
-    const pressed = !!showSecret;
+    const canReveal = !!(parsed && isOtp);
+    revealSecretBtn.classList.toggle('hidden', !canReveal);
+    revealSecretBtn.disabled = !canReveal;
+    const pressed = canReveal && !!showSecret;
     revealSecretBtn.textContent = pressed ? 'Hide secret' : 'Reveal secret';
     revealSecretBtn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
     revealSecretBtn.setAttribute(
       'aria-label',
       pressed ? 'Hide secret value' : 'Reveal secret value'
     );
-    revealSecretBtn.disabled = !parsed;
+    if (!canReveal) {
+      setButtonCallout(revealSecretBtn, false);
+    }
   }
+
+  if (copySecretBtn) {
+    const canCopySecret = !!(parsed && isOtp);
+    copySecretBtn.classList.toggle('hidden', !canCopySecret);
+    copySecretBtn.disabled = !canCopySecret;
+    if (!canCopySecret) {
+      setButtonCallout(copySecretBtn, false);
+    }
+  }
+
+  if (copyUriBtn) {
+    copyUriBtn.textContent = isOtp ? 'Copy otpauth URI' : 'Copy payload';
+    copyUriBtn.disabled = !parsed;
+  }
+
+  if (genericFormatEl) {
+    if (!showGenericSection) {
+      genericFormatEl.textContent = EMPTY_VALUE;
+    } else if (!parsed) {
+      genericFormatEl.textContent = '—';
+    } else {
+      genericFormatEl.textContent = parsed.format || 'Unknown';
+    }
+  }
+
+  if (genericSummaryEl) {
+    if (!showGenericSection) {
+      genericSummaryEl.textContent = EMPTY_VALUE;
+    } else if (!parsed) {
+      genericSummaryEl.textContent = 'Scan or drop a QR code to view details.';
+    } else {
+      genericSummaryEl.textContent =
+        parsed.summary || parsed.title || parsed.raw || EMPTY_VALUE;
+    }
+  }
+
+  if (genericDetailsListEl) {
+    if (showGenericSection) {
+      const fields = Array.isArray(parsed?.fields) ? parsed.fields : [];
+      if (!fields.length) {
+        genericDetailsListEl.textContent = GENERIC_DETAILS_PLACEHOLDER;
+        genericDetailsListEl.classList.add('is-placeholder');
+      } else {
+        genericDetailsListEl.classList.remove('is-placeholder');
+        genericDetailsListEl.innerHTML = '';
+        fields.forEach(({ label, value }) => {
+          const row = document.createElement('div');
+          row.className = 'detail-row';
+          const labelEl = document.createElement('div');
+          labelEl.className = 'detail-label';
+          labelEl.textContent = label || 'Field';
+          const valueEl = document.createElement('div');
+          valueEl.className = 'detail-value';
+          valueEl.textContent =
+            value === undefined || value === null || value === ''
+              ? EMPTY_VALUE
+              : String(value);
+          row.appendChild(labelEl);
+          row.appendChild(valueEl);
+          genericDetailsListEl.appendChild(row);
+        });
+      }
+    } else {
+      genericDetailsListEl.textContent = GENERIC_DETAILS_PLACEHOLDER;
+      genericDetailsListEl.classList.add('is-placeholder');
+    }
+  }
+
+  if (genericRawEl) {
+    genericRawEl.textContent =
+      showGenericSection && parsed?.raw ? parsed.raw : EMPTY_VALUE;
+  }
+
+  const hideCodePanel = !isOtp;
+  codePanel?.classList.toggle('hidden', hideCodePanel);
 }
 
 async function refreshCodeLoop() {
@@ -812,7 +1454,7 @@ async function refreshCodeLoop() {
   currentCode = '';
   updateCodeVisibility();
   if (countdownEl) countdownEl.textContent = '';
-  if (!parsed) return;
+  if (!parsed || parsed.format !== 'OTP') return;
   let lastRenderedCode = '';
   const update = async () => {
     const code = await generateOTP(parsed).catch(() => null);
@@ -846,23 +1488,27 @@ uriInput?.addEventListener('keydown', (e) => {
 });
 
 uriInput?.addEventListener('input', () => {
-  if (!uriInput.value) {
-    setUriValidity('');
-    return;
-  }
-  if (uriInput.value.toLowerCase().startsWith('otpauth://')) {
-    setUriValidity('');
-  }
+  setUriValidity('');
 });
 
 copySecretBtn?.addEventListener('click', async () => {
-  if (!parsed) return;
-  await copyToClipboard(parsed.secretB32 || '', 'Secret copied');
+  if (!parsed || parsed.format !== 'OTP' || !parsed.secretB32) return;
+  await copyToClipboard(parsed.secretB32, 'Secret copied');
 });
 
 copyUriBtn?.addEventListener('click', async () => {
   if (!parsed) return;
-  await copyToClipboard(parsed.original || '', 'URI copied');
+  const payload =
+    parsed.format === 'OTP'
+      ? parsed.original || parsed.raw || ''
+      : parsed.raw || parsed.original || '';
+  if (!payload) {
+    setStatus('Nothing to copy');
+    return;
+  }
+  const message =
+    parsed.format === 'OTP' ? 'otpauth URI copied' : 'Payload copied';
+  await copyToClipboard(payload, message);
 });
 
 copyCodeBtn?.addEventListener('click', async () => {
@@ -936,7 +1582,7 @@ if (dropZone) {
     e.preventDefault();
     dropZone.classList.remove('dragging');
     if (!fileUploadEnabled) {
-      setStatus('QR decoding is unavailable. Paste an otpauth URI instead.');
+      setStatus('QR decoding is unavailable. Paste the QR content instead.');
       return;
     }
     const file = e.dataTransfer?.files?.[0];
@@ -956,7 +1602,7 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   dropZone?.classList.remove('dragging');
   if (!fileUploadEnabled) {
-    setStatus('QR decoding is unavailable. Paste an otpauth URI instead.');
+    setStatus('QR decoding is unavailable. Paste the QR content instead.');
   }
 });
 
