@@ -8,6 +8,13 @@ const copyCodeBtn = $('copy-code');
 const uploadRow = $('upload-row');
 const supportWarning = $('support-warning');
 const bdNote = $('bd-note');
+const openCameraBtn = $('open-camera');
+const cameraModal = $('camera-modal');
+const cameraVideo = $('camera-video');
+const cameraCaptureBtn = $('camera-capture');
+const cameraCloseBtn = $('camera-close');
+const cameraCancelBtn = $('camera-cancel');
+const cameraPermission = $('camera-permission');
 const previewGroup = $('preview-group');
 const previewContainer = $('preview-container');
 const previewOverlay = $('preview-overlay');
@@ -29,6 +36,8 @@ let currentCode = '';
 let lastHighlightedCode = '';
 let toastTimer = null;
 let toastHideTimer = null;
+let cameraStream = null;
+let cameraModalVisible = false;
 
 function showToast(message, duration = 2200) {
   if (!toast || !message) return;
@@ -56,6 +65,117 @@ function note(message) {
 function setButtonCallout(button, active) {
   if (!button) return;
   button.classList.toggle('btn-callout', !!active);
+}
+
+function updateCameraAvailability() {
+  if (!openCameraBtn) return;
+  const cameraSupported = !!(
+    navigator.mediaDevices && navigator.mediaDevices.getUserMedia
+  );
+  const enabled = cameraSupported && fileUploadEnabled;
+  const container = openCameraBtn.parentElement;
+  if (container) container.classList.toggle('hidden', !enabled);
+  openCameraBtn.disabled = !enabled;
+}
+
+function showCameraModal() {
+  if (!cameraModal || cameraModalVisible) return;
+  cameraModal.classList.remove('hidden');
+  requestAnimationFrame(() => cameraModal.classList.add('is-visible'));
+  cameraModalVisible = true;
+}
+
+function hideCameraModal({ returnFocus } = {}) {
+  if (!cameraModal || !cameraModalVisible) return;
+  cameraModal.classList.remove('is-visible');
+  setTimeout(() => cameraModal?.classList.add('hidden'), 180);
+  cameraModalVisible = false;
+  cameraPermission?.classList.add('hidden');
+  stopCameraStream();
+  if (returnFocus) openCameraBtn?.focus();
+}
+
+function stopCameraStream() {
+  if (!cameraStream) return;
+  cameraStream.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+  if (cameraVideo) cameraVideo.srcObject = null;
+}
+
+async function openCamera() {
+  if (!openCameraBtn) return;
+  if (!fileUploadEnabled) {
+    setStatus('Camera capture requires built-in QR support');
+    return;
+  }
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+    setStatus('Camera not supported in this browser');
+    return;
+  }
+  try {
+    cameraPermission?.classList.remove('hidden');
+    showCameraModal();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+    cameraStream = stream;
+    if (cameraVideo) {
+      cameraVideo.srcObject = stream;
+      await cameraVideo.play().catch(() => {});
+      if (cameraVideo.readyState >= 2) {
+        cameraPermission?.classList.add('hidden');
+      } else {
+        cameraVideo.addEventListener(
+          'loadeddata',
+          () => cameraPermission?.classList.add('hidden'),
+          { once: true }
+        );
+      }
+    }
+  } catch (err) {
+    hideCameraModal({ returnFocus: true });
+    stopCameraStream();
+    setStatus('Unable to access camera');
+  }
+}
+
+async function captureFromCamera() {
+  if (!cameraVideo || !cameraStream) {
+    setStatus('Camera is not ready');
+    return;
+  }
+  if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
+    setStatus('Camera is warming up');
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = cameraVideo.videoWidth;
+  canvas.height = cameraVideo.videoHeight;
+  const ctx = canvas.getContext('2d', { willReadFrequently: false });
+  if (!ctx) {
+    setStatus('Unable to capture frame');
+    return;
+  }
+  ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(
+    async (blob) => {
+      if (!blob) {
+        setStatus('Failed to capture image');
+        return;
+      }
+      const file = new File([blob], 'camera-capture.png', {
+        type: blob.type || 'image/png',
+      });
+      await handleFile(file);
+      hideCameraModal({ returnFocus: true });
+    },
+    'image/png',
+    0.92
+  );
 }
 
 function updatePreviewVisibility() {
@@ -149,6 +269,8 @@ function updateCodeVisibility() {
       : 'Local decoding unavailable';
   }
 
+  updateCameraAvailability();
+
   if (hasBD) {
     fileInput.disabled = false;
     fileInput.removeAttribute('tabindex');
@@ -158,7 +280,7 @@ function updateCodeVisibility() {
     previewContainer?.classList.remove('hidden');
     previewGroup?.classList.remove('hidden');
     supportWarning?.classList.add('hidden');
-    setStatus('Drop a QR or paste a URI to begin!');
+    setStatus('Drop a QR, scan with camera, or paste a URI to begin!');
   } else {
     fileInput.disabled = true;
     fileInput.setAttribute('tabindex', '-1');
@@ -479,6 +601,20 @@ copyCodeBtn?.addEventListener('click', async () => {
   if (copied) {
     setButtonCallout(copyCodeBtn, false);
     lastHighlightedCode = currentCode;
+  }
+});
+
+openCameraBtn?.addEventListener('click', openCamera);
+cameraCaptureBtn?.addEventListener('click', captureFromCamera);
+[cameraCloseBtn, cameraCancelBtn].forEach((btn) =>
+  btn?.addEventListener('click', () => hideCameraModal({ returnFocus: true }))
+);
+cameraModal?.addEventListener('click', (event) => {
+  if (event.target === cameraModal) hideCameraModal({ returnFocus: true });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && cameraModalVisible) {
+    hideCameraModal({ returnFocus: true });
   }
 });
 

@@ -102,6 +102,15 @@ h1 {
   flex-wrap: wrap;
 }
 
+.actions {
+  margin-top: 12px;
+  display: flex;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
 button,
 .btn {
   appearance: none;
@@ -111,6 +120,11 @@ button,
   padding: 10px 14px;
   border-radius: 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
 }
 
 button:hover,
@@ -122,6 +136,28 @@ button:hover,
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(124, 140, 255, 0.18);
   background: #20223a;
+}
+
+.btn.full {
+  width: 100%;
+  justify-content: center;
+}
+
+.btn.icon {
+  padding: 0 12px;
+  font-size: 22px;
+  line-height: 1;
+  background: transparent;
+}
+
+.btn.accent {
+  border-color: var(--accent);
+  background: rgba(124, 140, 255, 0.18);
+}
+
+.btn.accent:hover {
+  border-color: var(--accent);
+  background: rgba(124, 140, 255, 0.26);
 }
 
 input[type='text'],
@@ -275,6 +311,83 @@ input[type='file'] {
 
 .small {
   font-size: 13px;
+}
+
+.camera-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 12, 0.7);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 400;
+}
+
+.camera-modal.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.camera-content {
+  width: min(480px, 100%);
+  background: rgba(16, 17, 24, 0.95);
+  border: 1px solid rgba(124, 140, 255, 0.24);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 32px 56px rgba(6, 7, 12, 0.6);
+}
+
+.camera-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.camera-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.camera-body {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0f1016;
+  aspect-ratio: 3 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-body video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#camera-permission {
+  position: absolute;
+  text-align: center;
+  padding: 12px;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.camera-controls .btn {
+  flex: 1;
+  justify-content: center;
 }
 
 .toast {

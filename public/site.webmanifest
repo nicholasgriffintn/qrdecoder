@@ -1,6 +1,6 @@
 {
-  "name": "MyWebSite",
-  "short_name": "MySite",
+  "name": "QR Decoder",
+  "short_name": "QR Decoder",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -15,7 +15,11 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  "start_url": ".",
+  "scope": "/",
+  "theme_color": "#0b0b10",
+  "background_color": "#0b0b10",
+  "display": "standalone",
+  "description": "Scan and decode otpauth QR codes locally in the browser",
+  "orientation": "portrait"
 }
