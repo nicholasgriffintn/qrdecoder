@@ -51,10 +51,6 @@ function setCopyButtonCallout(active) {
     }
   }
 
-  $('bd-note').textContent = hasBD
-    ? 'Built-in QR decode available'
-    : 'No built-in QR: paste URI';
-
   fileUploadEnabled = hasBD;
 
   if (hasBD) {
