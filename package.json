@@ -1,0 +1,19 @@
+{
+	"name": "qrdecoder",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"test": "vitest",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "0.10.0",
+		"@cloudflare/workers-types": "4.20251014.0",
+		"typescript": "^5.9.3",
+		"vitest": "~4.0.4",
+		"wrangler": "^4.45.0"
+	}
+}
