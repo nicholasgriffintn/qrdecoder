@@ -1,15 +1,14 @@
 # QR Decoder
 
-A tiny progressive web app for decoding `otpauth://` QR codes completely in the browser. Drop an image, paste a URI, or scan with your device camera to inspect the secret and generate HOTP/TOTP codes locally.
+A progressive web app that decodes QR codes directly in your browser. Drop an image, paste the payload, or scan with your device camera to inspect the contents. When the QR encodes an `otpauth://` URI the app exposes HOTP/TOTP metadata and generates fresh codes locally—otherwise it surfaces a readable summary with the raw payload right beside it.
 
 - Works offline after the first load
 - Drag & drop images or upload
-- Paste otpauth URIs directly
-- Decodes using the browser's built-in `BarcodeDetector` API when available, with an automatic
-  [`jsQR`](https://github.com/cozmo/jsQR) fallback for other browsers
+- Paste QR payloads directly
+- Recognises common formats (`otpauth://`, Wi-Fi configs, URLs, contacts, calendar events, geo links, mailto/SMS intents) and falls back to plain-text presentation for everything else
+- Decodes using the browser's built-in `BarcodeDetector` API when available, with an automatic [`jsQR`](https://github.com/cozmo/jsQR) fallback for other browsers
 - Camera capture for quick scanning on supported devices
-- Blur/reveal toggles for secrets and codes
-- Copy the secret, otpauth URI, and current OTP code to your clipboard
+- Blur/reveal toggles for OTP secrets and codes, plus copy helpers for all payloads
 
 ## Getting Started
 
