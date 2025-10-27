@@ -44,6 +44,14 @@ let cameraStream = null;
 let cameraModalVisible = false;
 let barcodeDetectorAvailable = false;
 let fallbackDecoderPromise = null;
+let cameraScanActive = false;
+let cameraScanRequestId = null;
+let cameraScanPending = false;
+let cameraScanCanvas = null;
+let cameraScanContext = null;
+let lastCameraScanTs = 0;
+let lastCameraScanValue = '';
+let lastCameraScanResetTimer = null;
 
 const FALLBACK_DECODER_URL = '/vendor/jsqr@1.4.0.js';
 
@@ -138,10 +146,98 @@ function hideCameraModal({ returnFocus } = {}) {
 }
 
 function stopCameraStream() {
+  stopCameraScan();
   if (!cameraStream) return;
   cameraStream.getTracks().forEach((track) => track.stop());
   cameraStream = null;
   if (cameraVideo) cameraVideo.srcObject = null;
+}
+
+function stopCameraScan() {
+  cameraScanActive = false;
+  if (cameraScanRequestId) {
+    cancelAnimationFrame(cameraScanRequestId);
+    cameraScanRequestId = null;
+  }
+  cameraScanPending = false;
+  lastCameraScanValue = '';
+  clearTimeout(lastCameraScanResetTimer);
+  lastCameraScanResetTimer = null;
+}
+
+function ensureCameraCanvas() {
+  if (cameraScanCanvas && cameraScanContext) return;
+  cameraScanCanvas = document.createElement('canvas');
+  cameraScanContext = cameraScanCanvas.getContext('2d', {
+    willReadFrequently: true,
+  });
+}
+
+function startCameraScan() {
+  if (!cameraVideo || !cameraStream) return;
+  ensureCameraCanvas();
+  if (!cameraScanCanvas || !cameraScanContext) {
+    setStatus('Unable to start camera scanner');
+    return;
+  }
+
+  cameraScanActive = true;
+  cameraScanPending = false;
+  lastCameraScanTs = 0;
+  lastCameraScanValue = '';
+  clearTimeout(lastCameraScanResetTimer);
+  lastCameraScanResetTimer = null;
+
+  const loop = () => {
+    if (!cameraScanActive) return;
+    cameraScanRequestId = requestAnimationFrame(loop);
+    if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
+
+    const now = performance.now();
+    if (cameraScanPending || now - lastCameraScanTs < 260) return;
+    lastCameraScanTs = now;
+    cameraScanPending = true;
+
+    cameraScanCanvas.width = cameraVideo.videoWidth;
+    cameraScanCanvas.height = cameraVideo.videoHeight;
+    cameraScanContext.drawImage(
+      cameraVideo,
+      0,
+      0,
+      cameraScanCanvas.width,
+      cameraScanCanvas.height
+    );
+
+    decodeQRFromCanvas(cameraScanCanvas, cameraScanContext, { strict: false })
+      .then((text) => {
+        if (!text) return;
+        if (text === lastCameraScanValue) return;
+        lastCameraScanValue = text;
+        clearTimeout(lastCameraScanResetTimer);
+        lastCameraScanResetTimer = setTimeout(() => {
+          lastCameraScanValue = '';
+          lastCameraScanResetTimer = null;
+        }, 2200);
+        const handled = handleDecodedOtp(text, {
+          message: 'QR scanned ✔',
+          previewCanvas: cameraScanCanvas,
+        });
+        if (handled) {
+          stopCameraScan();
+          hideCameraModal();
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        cameraScanPending = false;
+      });
+  };
+
+  if (cameraScanRequestId) {
+    cancelAnimationFrame(cameraScanRequestId);
+  }
+  cameraScanRequestId = requestAnimationFrame(loop);
+  setStatus('Aim your QR code at the camera to scan');
 }
 
 async function openCamera() {
@@ -166,10 +262,14 @@ async function openCamera() {
       await cameraVideo.play().catch(() => {});
       if (cameraVideo.readyState >= 2) {
         cameraPermission?.classList.add('hidden');
+        startCameraScan();
       } else {
         cameraVideo.addEventListener(
           'loadeddata',
-          () => cameraPermission?.classList.add('hidden'),
+          () => {
+            cameraPermission?.classList.add('hidden');
+            startCameraScan();
+          },
           { once: true }
         );
       }
@@ -186,6 +286,7 @@ async function captureFromCamera() {
     setStatus('Camera is not ready');
     return;
   }
+  stopCameraScan();
   if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
     setStatus('Camera is warming up');
     return;
@@ -253,7 +354,9 @@ function updatePreviewVisibility() {
   previewOverlay?.classList.toggle('hidden', !hidden);
   previewOverlay?.setAttribute('aria-hidden', hidden ? 'false' : 'true');
   if (revealPreviewBtn) {
-    revealPreviewBtn.textContent = hidden ? 'Reveal QR preview' : 'Hide QR preview';
+    revealPreviewBtn.textContent = hidden
+      ? 'Reveal QR preview'
+      : 'Hide QR preview';
     revealPreviewBtn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     setButtonCallout(revealPreviewBtn, hidden);
   }
@@ -307,11 +410,7 @@ function updateCodeVisibility(options = {}) {
 
   if (copyCodeBtn) {
     copyCodeBtn.disabled = !currentCode;
-    if (
-      updateText &&
-      currentCode &&
-      currentCode !== lastHighlightedCode
-    ) {
+    if (updateText && currentCode && currentCode !== lastHighlightedCode) {
       setButtonCallout(copyCodeBtn, true);
       lastHighlightedCode = currentCode;
     }
@@ -362,19 +461,15 @@ function updateCodeVisibility(options = {}) {
   updateCodeVisibility();
 })();
 
-async function decodeQRFromImage(imgBlob) {
-  const bitmap = await createImageBitmap(await imgBlob);
-  const cnv = document.createElement('canvas');
-  cnv.width = bitmap.width;
-  cnv.height = bitmap.height;
-  const ctx = cnv.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Unable to prepare image for decoding');
-  ctx.drawImage(bitmap, 0, 0);
+async function decodeQRFromCanvas(canvas, ctx, { strict = true } = {}) {
+  if (!canvas || !ctx) {
+    throw new Error('Unable to prepare image for decoding');
+  }
 
   if (barcodeDetectorAvailable && 'BarcodeDetector' in window) {
     try {
       const detector = new BarcodeDetector({ formats: ['qr_code'] });
-      const barcodes = await detector.detect(cnv);
+      const barcodes = await detector.detect(canvas);
       if (barcodes.length && barcodes[0]?.rawValue) {
         return barcodes[0].rawValue;
       }
@@ -383,13 +478,27 @@ async function decodeQRFromImage(imgBlob) {
     }
   }
 
-  const imageData = ctx.getImageData(0, 0, cnv.width, cnv.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const jsQR = await loadFallbackDecoder();
   const result = jsQR(imageData.data, imageData.width, imageData.height, {
     inversionAttempts: 'attemptBoth',
   });
-  if (!result || !result.data) throw new Error('No QR code found');
+  if (!result || !result.data) {
+    if (!strict) return null;
+    throw new Error('No QR code found');
+  }
   return result.data;
+}
+
+async function decodeQRFromImage(imgBlob) {
+  const bitmap = await createImageBitmap(await imgBlob);
+  const cnv = document.createElement('canvas');
+  cnv.width = bitmap.width;
+  cnv.height = bitmap.height;
+  const ctx = cnv.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Unable to prepare image for decoding');
+  ctx.drawImage(bitmap, 0, 0);
+  return decodeQRFromCanvas(cnv, ctx, { strict: true });
 }
 
 function parseOtpAuth(uri) {
@@ -545,6 +654,7 @@ function applyParsed(result, message) {
   currentCode = '';
   setButtonCallout(copyCodeBtn, false);
   setStatus(message);
+  setUriValidity('');
   render();
   updatePreviewVisibility();
   updateCodeVisibility();
@@ -587,6 +697,37 @@ async function handleFile(file) {
   }
 }
 
+function handleDecodedOtp(text, { message, previewCanvas } = {}) {
+  if (!text.startsWith('otpauth://')) {
+    setStatus('QR is not an otpauth URI');
+    return false;
+  }
+  const parsedResult = parseOtpAuth(text);
+  if (parsedResult.error) {
+    setStatus(parsedResult.error);
+    return false;
+  }
+
+  if (previewCanvas) {
+    previewCanvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'camera-scan.png', {
+          type: blob.type || 'image/png',
+        });
+        setPreviewFromFile(file);
+      },
+      'image/png',
+      0.92
+    );
+  }
+
+  applyParsed(parsedResult, message || 'QR decoded ✔');
+  if (uriInput) uriInput.value = parsedResult.original || text;
+  setUriValidity('');
+  return true;
+}
+
 async function copyToClipboard(text, successMessage) {
   if (!navigator.clipboard?.writeText) {
     setStatus('Clipboard access is unavailable in this context');
@@ -604,15 +745,39 @@ async function copyToClipboard(text, successMessage) {
 
 function attemptParseFromInput() {
   const value = uriInput?.value.trim();
-  if (!value) return;
+  if (!value) {
+    setUriValidity('Enter an otpauth URI to parse.');
+    setStatus('Enter an otpauth URI to parse.');
+    uriInput?.focus();
+    return;
+  }
+  if (!value.toLowerCase().startsWith('otpauth://')) {
+    setUriValidity('URI must start with otpauth://');
+    setStatus('URI must start with otpauth://');
+    uriInput?.focus();
+    return;
+  }
   const parsedResult = parseOtpAuth(value);
   if (parsedResult.error) {
+    setUriValidity(parsedResult.error);
     resetParsedWithError(parsedResult.error);
     clearPreview();
     return;
   }
+  setUriValidity('');
   clearPreview();
   applyParsed(parsedResult, 'URI parsed ✔');
+}
+
+function setUriValidity(message) {
+  if (!uriInput) return;
+  uriInput.classList.toggle('field-invalid', !!message);
+  if (typeof uriInput.setCustomValidity === 'function') {
+    uriInput.setCustomValidity(message || '');
+  }
+  if (message) {
+    uriInput.reportValidity?.();
+  }
 }
 
 function render() {
@@ -678,6 +843,16 @@ uriInput?.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   attemptParseFromInput();
+});
+
+uriInput?.addEventListener('input', () => {
+  if (!uriInput.value) {
+    setUriValidity('');
+    return;
+  }
+  if (uriInput.value.toLowerCase().startsWith('otpauth://')) {
+    setUriValidity('');
+  }
 });
 
 copySecretBtn?.addEventListener('click', async () => {

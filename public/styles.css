@@ -192,6 +192,11 @@ input[type='file'] {
   border-radius: 12px;
 }
 
+input[type='text'].field-invalid {
+  border-color: #ff7575;
+  box-shadow: 0 0 0 2px rgba(255, 117, 117, 0.2);
+}
+
 .preview {
   width: 160px;
   height: 160px;
@@ -452,6 +457,7 @@ input[type='file'] {
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 500;
 }
 
 .toast.is-visible {
