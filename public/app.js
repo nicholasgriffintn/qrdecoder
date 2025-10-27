@@ -1,6 +1,4 @@
 const $ = (id) => document.getElementById(id);
-const statusEl = $('status');
-const copyNoteEl = $('copied-note');
 const img = $('preview');
 const fileInput = $('file');
 const dropZone = $('drop');
@@ -8,8 +6,8 @@ const parseButton = $('parse');
 const uriInput = $('uri');
 const copyCodeBtn = $('copy-code');
 const uploadRow = $('upload-row');
-const noUploadMsg = $('no-upload');
 const supportWarning = $('support-warning');
+const bdNote = $('bd-note');
 const previewGroup = $('preview-group');
 const previewContainer = $('preview-container');
 const previewOverlay = $('preview-overlay');
@@ -18,6 +16,7 @@ const codeEl = $('code');
 const codeOverlay = $('code-overlay');
 const revealCodeBtn = $('reveal-code');
 const countdownEl = $('countdown');
+const toast = $('toast');
 
 let parsed = null;
 let showSecret = false;
@@ -28,16 +27,30 @@ let showPreview = false;
 let showCode = false;
 let currentCode = '';
 let lastHighlightedCode = '';
+let toastTimer = null;
+let toastHideTimer = null;
 
-function setStatus(t) {
-  statusEl.textContent = t;
+function showToast(message, duration = 2200) {
+  if (!toast || !message) return;
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  // force reflow so transition retriggers
+  void toast.offsetWidth;
+  toast.classList.add('is-visible');
+  clearTimeout(toastTimer);
+  clearTimeout(toastHideTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('is-visible');
+    toastHideTimer = setTimeout(() => toast.classList.add('hidden'), 200);
+  }, duration);
 }
 
-function note(el, t) {
-  el.textContent = t;
-  setTimeout(() => {
-    el.textContent = '';
-  }, 1200);
+function setStatus(message) {
+  showToast(message, 2600);
+}
+
+function note(message) {
+  showToast(message, 1800);
 }
 
 function setButtonCallout(button, active) {
@@ -111,7 +124,6 @@ function updateCodeVisibility() {
       lastHighlightedCode = currentCode;
     }
   }
-
 }
 
 (async function initSupport() {
@@ -131,16 +143,22 @@ function updateCodeVisibility() {
 
   fileUploadEnabled = hasBD;
 
+  if (bdNote) {
+    bdNote.textContent = hasBD
+      ? '(or drag & drop)'
+      : 'Local decoding unavailable';
+  }
+
   if (hasBD) {
     fileInput.disabled = false;
     fileInput.removeAttribute('tabindex');
     dropZone?.classList.remove('drop-disabled');
     dropZone?.removeAttribute('aria-disabled');
     uploadRow?.classList.remove('hidden');
-    noUploadMsg?.classList.add('hidden');
     previewContainer?.classList.remove('hidden');
     previewGroup?.classList.remove('hidden');
     supportWarning?.classList.add('hidden');
+    setStatus('Drop a QR or paste a URI to begin!');
   } else {
     fileInput.disabled = true;
     fileInput.setAttribute('tabindex', '-1');
@@ -148,11 +166,10 @@ function updateCodeVisibility() {
     dropZone?.classList.add('drop-disabled');
     dropZone?.setAttribute('aria-disabled', 'true');
     uploadRow?.classList.add('hidden');
-    noUploadMsg?.classList.remove('hidden');
     previewContainer?.classList.add('hidden');
     previewGroup?.classList.add('hidden');
     supportWarning?.classList.remove('hidden');
-    setStatus('Paste an otpauth URI to decode');
+    setStatus('Paste an otpauth URI to begin!');
     clearPreview();
   }
 
@@ -248,9 +265,13 @@ function base32ToBytes(b32) {
 
 async function hmac(algo, keyBytes, msgBytes) {
   const subtleAlgo = { name: 'HMAC', hash: { name: algo } };
-  const key = await crypto.subtle.importKey('raw', keyBytes, subtleAlgo, false, [
-    'sign',
-  ]);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    subtleAlgo,
+    false,
+    ['sign']
+  );
   return new Uint8Array(await crypto.subtle.sign('HMAC', key, msgBytes));
 }
 
@@ -372,7 +393,7 @@ async function copyToClipboard(text, successMessage) {
   }
   try {
     await navigator.clipboard.writeText(text);
-    note(copyNoteEl, successMessage);
+    note(successMessage);
     return true;
   } catch (err) {
     setStatus('Failed to copy to clipboard');
@@ -499,7 +520,9 @@ if (dropZone) {
   dropZone.addEventListener('dragenter', onDragEnter);
   dropZone.addEventListener('dragover', onDragEnter);
   dropZone.addEventListener('dragleave', onDragLeave);
-  dropZone.addEventListener('dragend', () => dropZone.classList.remove('dragging'));
+  dropZone.addEventListener('dragend', () =>
+    dropZone.classList.remove('dragging')
+  );
 
   dropZone.addEventListener('drop', (e) => {
     if (!isFileDrag(e)) return;

@@ -23,18 +23,18 @@
           href="https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector" target="_blank"
           rel="noopener">BarcodeDetector</a>.
       </p>
-      <div id="support-warning" class="banner hidden" role="status">
-        Your browser cannot decode QR codes locally. Paste an otpauth URI below instead.
-      </div>
 
       <div class="grid" style="margin-top: 16px">
         <div class="drop" id="drop">
-          <p id="status" class="muted small" style="margin: 0 0 12px">
-            Drop a QR or paste a URI
-          </p>
-          <div class="row" id="upload-row">
+          <div class="field" id="upload-row">
+            <div class="label-row">
+              <label class="label" for="file">Upload a QR image</label>
+              <span id="bd-note" class="muted small"></span>
+            </div>
             <input id="file" type="file" accept="image/*" />
-            <span class="muted small">or drag & drop an image with a QR code</span>
+          </div>
+          <div id="support-warning" class="banner hidden" role="status">
+            Your browser cannot decode QR codes locally. Paste an otpauth URI below instead.
           </div>
           <p id="no-upload" class="muted small hidden" style="margin-top: 8px">
             QR decoding isn&rsquo;t available in this browser. Paste an otpauth URI instead.
@@ -100,7 +100,6 @@
           </div>
           <div class="row small" style="margin-top: 8px">
             <button id="copy-uri" class="btn small">Copy otpauth URI</button>
-            <span id="copied-note" class="muted small"></span>
           </div>
         </div>
 
@@ -122,6 +121,7 @@
     </div>
   </div>
 
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   <script src="app.js" defer></script>
 </body>
 
