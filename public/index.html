@@ -6,6 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>QR Decoder</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="QR Decoder" />
+  <link rel="manifest" href="/site.webmanifest" />
 </head>
 
 <body>
@@ -42,8 +48,14 @@
             <button id="parse">Parse</button>
           </div>
         </div>
-        <div class="preview" id="preview-container">
-          <img id="preview" alt="preview" style="max-width: 100%; max-height: 100%; display: none" />
+        <div class="preview-group" id="preview-group">
+          <div class="preview" id="preview-container">
+            <img id="preview" alt="preview" style="max-width: 100%; max-height: 100%; display: none" />
+            <div id="preview-overlay" class="preview-mask hidden" aria-hidden="true">
+              Hidden preview — select reveal
+            </div>
+          </div>
+          <button id="reveal-preview" class="btn small hidden" type="button">Reveal QR</button>
         </div>
       </div>
 
@@ -94,10 +106,16 @@
 
         <div class="panel">
           <h3 style="margin: 0 0 10px">Code</h3>
-          <div id="code" class="code mono">— — — — — —</div>
+          <div class="code-wrap">
+            <div id="code" class="code mono">— — — — — —</div>
+            <div id="code-overlay" class="code-mask hidden" aria-hidden="true">
+              Hidden code — select reveal
+            </div>
+          </div>
           <div id="countdown" class="muted small" style="text-align: center; margin-top: 6px"></div>
-          <div style="display: flex; justify-content: center; margin-top: 8px">
-            <button id="copy-code" class="btn small">Copy Code</button>
+          <div class="row small" style="justify-content: center; margin-top: 8px; gap: 8px">
+            <button id="reveal-code" class="btn small hidden" type="button">Reveal Code</button>
+            <button id="copy-code" class="btn small" type="button" disabled>Copy Code</button>
           </div>
         </div>
       </div>

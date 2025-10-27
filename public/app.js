@@ -10,8 +10,13 @@ const copyCodeBtn = $('copy-code');
 const uploadRow = $('upload-row');
 const noUploadMsg = $('no-upload');
 const supportWarning = $('support-warning');
+const previewGroup = $('preview-group');
 const previewContainer = $('preview-container');
+const previewOverlay = $('preview-overlay');
+const revealPreviewBtn = $('reveal-preview');
 const codeEl = $('code');
+const codeOverlay = $('code-overlay');
+const revealCodeBtn = $('reveal-code');
 const countdownEl = $('countdown');
 
 let parsed = null;
@@ -19,6 +24,10 @@ let showSecret = false;
 let timer = null;
 let currentObjectUrl = null;
 let fileUploadEnabled = true;
+let showPreview = false;
+let showCode = false;
+let currentCode = '';
+let lastHighlightedCode = '';
 
 function setStatus(t) {
   statusEl.textContent = t;
@@ -31,9 +40,78 @@ function note(el, t) {
   }, 1200);
 }
 
-function setCopyButtonCallout(active) {
-  if (!copyCodeBtn) return;
-  copyCodeBtn.classList.toggle('btn-callout', active);
+function setButtonCallout(button, active) {
+  if (!button) return;
+  button.classList.toggle('btn-callout', !!active);
+}
+
+function updatePreviewVisibility() {
+  if (!previewContainer || !img) return;
+  const hasImage = !!img.getAttribute('src');
+  if (!hasImage) {
+    img.style.display = 'none';
+    img.classList.remove('is-blurred');
+    previewOverlay?.classList.add('hidden');
+    revealPreviewBtn?.classList.add('hidden');
+    setButtonCallout(revealPreviewBtn, false);
+    if (revealPreviewBtn) revealPreviewBtn.textContent = 'Reveal QR';
+    return;
+  }
+
+  img.style.display = 'block';
+  if (!fileUploadEnabled) {
+    img.classList.remove('is-blurred');
+    previewOverlay?.classList.add('hidden');
+    revealPreviewBtn?.classList.add('hidden');
+    setButtonCallout(revealPreviewBtn, false);
+    if (revealPreviewBtn) revealPreviewBtn.textContent = 'Reveal QR';
+    return;
+  }
+
+  revealPreviewBtn?.classList.remove('hidden');
+  const hidden = !showPreview;
+  img.classList.toggle('is-blurred', hidden);
+  previewOverlay?.classList.toggle('hidden', !hidden);
+  if (revealPreviewBtn) {
+    revealPreviewBtn.textContent = hidden ? 'Reveal QR' : 'Hide QR';
+    setButtonCallout(revealPreviewBtn, hidden);
+  }
+}
+
+function updateCodeVisibility() {
+  if (!codeEl) return;
+
+  if (!parsed || !currentCode) {
+    codeEl.textContent = parsed ? '———' : '— — — — — —';
+    codeEl.classList.remove('is-blurred');
+    codeOverlay?.classList.add('hidden');
+    revealCodeBtn?.classList.add('hidden');
+    if (revealCodeBtn) revealCodeBtn.textContent = 'Reveal Code';
+    setButtonCallout(revealCodeBtn, false);
+    setButtonCallout(copyCodeBtn, false);
+    if (copyCodeBtn) copyCodeBtn.disabled = true;
+    lastHighlightedCode = '';
+    return;
+  }
+
+  revealCodeBtn?.classList.remove('hidden');
+  const hidden = !showCode;
+  codeEl.textContent = currentCode;
+  codeEl.classList.toggle('is-blurred', hidden);
+  codeOverlay?.classList.toggle('hidden', !hidden);
+  if (revealCodeBtn) {
+    revealCodeBtn.textContent = hidden ? 'Reveal Code' : 'Hide Code';
+    setButtonCallout(revealCodeBtn, hidden);
+  }
+
+  if (copyCodeBtn) {
+    copyCodeBtn.disabled = !currentCode;
+    if (currentCode && currentCode !== lastHighlightedCode) {
+      setButtonCallout(copyCodeBtn, true);
+      lastHighlightedCode = currentCode;
+    }
+  }
+
 }
 
 (async function initSupport() {
@@ -61,6 +139,7 @@ function setCopyButtonCallout(active) {
     uploadRow?.classList.remove('hidden');
     noUploadMsg?.classList.add('hidden');
     previewContainer?.classList.remove('hidden');
+    previewGroup?.classList.remove('hidden');
     supportWarning?.classList.add('hidden');
   } else {
     fileInput.disabled = true;
@@ -71,10 +150,14 @@ function setCopyButtonCallout(active) {
     uploadRow?.classList.add('hidden');
     noUploadMsg?.classList.remove('hidden');
     previewContainer?.classList.add('hidden');
+    previewGroup?.classList.add('hidden');
     supportWarning?.classList.remove('hidden');
     setStatus('Paste an otpauth URI to decode');
     clearPreview();
   }
+
+  updatePreviewVisibility();
+  updateCodeVisibility();
 })();
 
 async function decodeQRFromImage(imgBlob) {
@@ -208,13 +291,16 @@ async function generateOTP({ type, secretB32, algo, digits, period, counter }) {
 }
 
 function clearPreview() {
-  setCopyButtonCallout(false);
+  setButtonCallout(revealPreviewBtn, false);
   if (currentObjectUrl) {
     URL.revokeObjectURL(currentObjectUrl);
     currentObjectUrl = null;
   }
+  showPreview = false;
   img.src = '';
+  img.removeAttribute('src');
   img.style.display = 'none';
+  updatePreviewVisibility();
 }
 
 function setPreviewFromFile(file) {
@@ -224,14 +310,22 @@ function setPreviewFromFile(file) {
   currentObjectUrl = URL.createObjectURL(file);
   img.src = currentObjectUrl;
   img.style.display = 'block';
+  previewContainer?.classList.remove('hidden');
+  showPreview = false;
+  updatePreviewVisibility();
 }
 
 function applyParsed(result, message) {
   parsed = result;
   showSecret = false;
-  setCopyButtonCallout(true);
+  showPreview = false;
+  showCode = false;
+  currentCode = '';
+  setButtonCallout(copyCodeBtn, false);
   setStatus(message);
   render();
+  updatePreviewVisibility();
+  updateCodeVisibility();
   refreshCodeLoop();
 }
 
@@ -240,7 +334,13 @@ function resetParsedWithError(message) {
   render();
   refreshCodeLoop();
   setStatus(message);
-  setCopyButtonCallout(false);
+  setButtonCallout(revealCodeBtn, false);
+  setButtonCallout(copyCodeBtn, false);
+  showPreview = false;
+  showCode = false;
+  currentCode = '';
+  updatePreviewVisibility();
+  updateCodeVisibility();
 }
 
 async function handleFile(file) {
@@ -310,12 +410,14 @@ function render() {
 
 async function refreshCodeLoop() {
   clearInterval(timer);
-  if (codeEl) codeEl.textContent = '— — — — — —';
+  currentCode = '';
+  updateCodeVisibility();
   if (countdownEl) countdownEl.textContent = '';
   if (!parsed) return;
   const update = async () => {
     const code = await generateOTP(parsed).catch(() => null);
-    if (codeEl) codeEl.textContent = code || '———';
+    currentCode = code || '';
+    updateCodeVisibility();
     if (parsed.type === 'TOTP') {
       const nowSeconds = Math.floor(Date.now() / 1000);
       const left = parsed.period - (nowSeconds % parsed.period);
@@ -351,15 +453,29 @@ $('copy-uri').addEventListener('click', async () => {
 });
 
 copyCodeBtn?.addEventListener('click', async () => {
-  const t = codeEl?.textContent.trim();
-  if (!t || t.includes('—')) return;
-  const copied = await copyToClipboard(t, 'Code copied');
-  if (copied) setCopyButtonCallout(false);
+  if (!currentCode) return;
+  const copied = await copyToClipboard(currentCode, 'Code copied');
+  if (copied) {
+    setButtonCallout(copyCodeBtn, false);
+    lastHighlightedCode = currentCode;
+  }
 });
 
 $('reveal').addEventListener('click', () => {
   showSecret = !showSecret;
   render();
+});
+
+revealPreviewBtn?.addEventListener('click', () => {
+  if (!img.getAttribute('src')) return;
+  showPreview = !showPreview;
+  updatePreviewVisibility();
+});
+
+revealCodeBtn?.addEventListener('click', () => {
+  if (!currentCode) return;
+  showCode = !showCode;
+  updateCodeVisibility();
 });
 
 function isFileDrag(event) {
@@ -414,4 +530,6 @@ window.addEventListener('drop', (e) => {
   }
 });
 
+updatePreviewVisibility();
+updateCodeVisibility();
 render();
