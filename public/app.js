@@ -4,6 +4,8 @@ const fileInput = $('file');
 const dropZone = $('drop');
 const parseButton = $('parse');
 const uriInput = $('uri');
+const copySecretBtn = $('copy-secret');
+const copyUriBtn = $('copy-uri');
 const copyCodeBtn = $('copy-code');
 const uploadRow = $('upload-row');
 const supportWarning = $('support-warning');
@@ -19,6 +21,8 @@ const previewGroup = $('preview-group');
 const previewContainer = $('preview-container');
 const previewOverlay = $('preview-overlay');
 const revealPreviewBtn = $('reveal-preview');
+const secretValueEl = $('secret');
+const revealSecretBtn = $('reveal');
 const codeEl = $('code');
 const codeOverlay = $('code-overlay');
 const revealCodeBtn = $('reveal-code');
@@ -320,9 +324,13 @@ function updatePreviewVisibility() {
     img.style.display = 'none';
     img.classList.remove('is-blurred');
     previewOverlay?.classList.add('hidden');
+    previewOverlay?.setAttribute('aria-hidden', 'true');
     revealPreviewBtn?.classList.add('hidden');
     setButtonCallout(revealPreviewBtn, false);
-    if (revealPreviewBtn) revealPreviewBtn.textContent = 'Reveal QR';
+    if (revealPreviewBtn) {
+      revealPreviewBtn.textContent = 'Reveal QR preview';
+      revealPreviewBtn.setAttribute('aria-pressed', 'false');
+    }
     return;
   }
 
@@ -330,9 +338,13 @@ function updatePreviewVisibility() {
   if (!fileUploadEnabled) {
     img.classList.remove('is-blurred');
     previewOverlay?.classList.add('hidden');
+    previewOverlay?.setAttribute('aria-hidden', 'true');
     revealPreviewBtn?.classList.add('hidden');
     setButtonCallout(revealPreviewBtn, false);
-    if (revealPreviewBtn) revealPreviewBtn.textContent = 'Reveal QR';
+    if (revealPreviewBtn) {
+      revealPreviewBtn.textContent = 'Reveal QR preview';
+      revealPreviewBtn.setAttribute('aria-pressed', 'false');
+    }
     return;
   }
 
@@ -340,41 +352,65 @@ function updatePreviewVisibility() {
   const hidden = !showPreview;
   img.classList.toggle('is-blurred', hidden);
   previewOverlay?.classList.toggle('hidden', !hidden);
+  previewOverlay?.setAttribute('aria-hidden', hidden ? 'false' : 'true');
   if (revealPreviewBtn) {
-    revealPreviewBtn.textContent = hidden ? 'Reveal QR' : 'Hide QR';
+    revealPreviewBtn.textContent = hidden
+      ? 'Reveal QR preview'
+      : 'Hide QR preview';
+    revealPreviewBtn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     setButtonCallout(revealPreviewBtn, hidden);
   }
 }
 
-function updateCodeVisibility() {
+function updateCodeVisibility(options = {}) {
+  const { updateText = true } = options;
   if (!codeEl) return;
 
   if (!parsed || !currentCode) {
-    codeEl.textContent = parsed ? '———' : '— — — — — —';
+    if (updateText) {
+      codeEl.textContent = parsed ? '———' : '— — — — — —';
+    }
     codeEl.classList.remove('is-blurred');
     codeOverlay?.classList.add('hidden');
+    codeOverlay?.setAttribute('aria-hidden', 'true');
     revealCodeBtn?.classList.add('hidden');
-    if (revealCodeBtn) revealCodeBtn.textContent = 'Reveal Code';
+    if (revealCodeBtn) {
+      revealCodeBtn.textContent = 'Reveal code';
+      revealCodeBtn.setAttribute('aria-pressed', 'false');
+    }
     setButtonCallout(revealCodeBtn, false);
     setButtonCallout(copyCodeBtn, false);
     if (copyCodeBtn) copyCodeBtn.disabled = true;
     lastHighlightedCode = '';
+    codeEl.setAttribute('aria-live', 'off');
     return;
   }
 
   revealCodeBtn?.classList.remove('hidden');
   const hidden = !showCode;
-  codeEl.textContent = currentCode;
+  if (updateText) {
+    const hiddenValue =
+      currentCode && currentCode.length
+        ? '•'.repeat(currentCode.length)
+        : '———';
+    codeEl.textContent = hidden ? hiddenValue : currentCode;
+  }
   codeEl.classList.toggle('is-blurred', hidden);
   codeOverlay?.classList.toggle('hidden', !hidden);
+  codeOverlay?.setAttribute('aria-hidden', hidden ? 'false' : 'true');
   if (revealCodeBtn) {
-    revealCodeBtn.textContent = hidden ? 'Reveal Code' : 'Hide Code';
+    revealCodeBtn.textContent = hidden ? 'Reveal code' : 'Hide code';
+    revealCodeBtn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     setButtonCallout(revealCodeBtn, hidden);
   }
+  codeEl.setAttribute(
+    'aria-live',
+    !hidden && parsed?.type === 'TOTP' ? 'polite' : 'off'
+  );
 
   if (copyCodeBtn) {
     copyCodeBtn.disabled = !currentCode;
-    if (currentCode && currentCode !== lastHighlightedCode) {
+    if (updateText && currentCode && currentCode !== lastHighlightedCode) {
       setButtonCallout(copyCodeBtn, true);
       lastHighlightedCode = currentCode;
     }
@@ -673,13 +709,17 @@ function handleDecodedOtp(text, { message, previewCanvas } = {}) {
   }
 
   if (previewCanvas) {
-    previewCanvas.toBlob((blob) => {
-      if (!blob) return;
-      const file = new File([blob], 'camera-scan.png', {
-        type: blob.type || 'image/png',
-      });
-      setPreviewFromFile(file);
-    }, 'image/png', 0.92);
+    previewCanvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'camera-scan.png', {
+          type: blob.type || 'image/png',
+        });
+        setPreviewFromFile(file);
+      },
+      'image/png',
+      0.92
+    );
   }
 
   applyParsed(parsedResult, message || 'QR decoded ✔');
@@ -748,11 +788,23 @@ function render() {
   $('digits').textContent = parsed?.digits ?? '—';
   $('period').textContent = parsed?.type === 'TOTP' ? parsed.period : '—';
   $('counter').textContent = parsed?.type === 'HOTP' ? parsed.counter : '—';
-  $('secret').textContent = parsed
-    ? showSecret
-      ? parsed.secretB32
-      : '•'.repeat(Math.min(parsed.secretB32.length, 24))
-    : '—';
+  if (secretValueEl) {
+    secretValueEl.textContent = parsed
+      ? showSecret
+        ? parsed.secretB32
+        : '•'.repeat(Math.min(parsed.secretB32.length, 24))
+      : '—';
+  }
+  if (revealSecretBtn) {
+    const pressed = !!showSecret;
+    revealSecretBtn.textContent = pressed ? 'Hide secret' : 'Reveal secret';
+    revealSecretBtn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    revealSecretBtn.setAttribute(
+      'aria-label',
+      pressed ? 'Hide secret value' : 'Reveal secret value'
+    );
+    revealSecretBtn.disabled = !parsed;
+  }
 }
 
 async function refreshCodeLoop() {
@@ -761,15 +813,19 @@ async function refreshCodeLoop() {
   updateCodeVisibility();
   if (countdownEl) countdownEl.textContent = '';
   if (!parsed) return;
+  let lastRenderedCode = '';
   const update = async () => {
     const code = await generateOTP(parsed).catch(() => null);
-    currentCode = code || '';
-    updateCodeVisibility();
+    const normalized = code || '';
+    const codeChanged = normalized !== lastRenderedCode;
+    currentCode = normalized;
+    updateCodeVisibility({ updateText: codeChanged });
     if (parsed.type === 'TOTP') {
       const nowSeconds = Math.floor(Date.now() / 1000);
       const left = parsed.period - (nowSeconds % parsed.period);
       if (countdownEl) countdownEl.textContent = `Refreshes in ${left}s`;
     }
+    lastRenderedCode = normalized;
   };
   await update();
   timer = setInterval(update, 1000);
@@ -799,12 +855,12 @@ uriInput?.addEventListener('input', () => {
   }
 });
 
-$('copy-secret').addEventListener('click', async () => {
+copySecretBtn?.addEventListener('click', async () => {
   if (!parsed) return;
   await copyToClipboard(parsed.secretB32 || '', 'Secret copied');
 });
 
-$('copy-uri').addEventListener('click', async () => {
+copyUriBtn?.addEventListener('click', async () => {
   if (!parsed) return;
   await copyToClipboard(parsed.original || '', 'URI copied');
 });
@@ -832,7 +888,8 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-$('reveal').addEventListener('click', () => {
+revealSecretBtn?.addEventListener('click', () => {
+  if (!parsed || revealSecretBtn.disabled) return;
   showSecret = !showSecret;
   render();
 });

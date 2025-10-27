@@ -11,6 +11,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body {
   height: 100%;
@@ -158,6 +170,16 @@ button:hover,
 .btn.accent:hover {
   border-color: var(--accent);
   background: rgba(124, 140, 255, 0.26);
+}
+
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+a:focus-visible,
+.code:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(124, 140, 255, 0.2);
 }
 
 input[type='text'],

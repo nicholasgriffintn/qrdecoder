@@ -48,7 +48,7 @@
               <input id="uri" type="text"
                 placeholder="otpauth://totp/Example:alice@acme.com?secret=JBSW...&issuer=Acme" />
             </div>
-            <button id="parse">Parse</button>
+            <button id="parse" type="button">Parse</button>
           </div>
         </div>
         <div class="preview-group" id="preview-group">
@@ -58,7 +58,8 @@
               Hidden preview — select reveal
             </div>
           </div>
-          <button id="reveal-preview" class="btn small hidden" type="button">Reveal QR</button>
+          <button id="reveal-preview" class="btn small hidden" type="button" aria-controls="preview-container"
+            aria-pressed="false">Reveal QR preview</button>
         </div>
       </div>
 
@@ -102,27 +103,33 @@
             <div class="secret">
               <span id="secret" class="secret-value mono">—</span>
               <div class="secret-actions">
-                <button id="reveal" class="btn small">Reveal</button>
-                <button id="copy-secret" class="btn small">Copy</button>
+                <button id="reveal" class="btn small" type="button" aria-controls="secret"
+                  aria-pressed="false">Reveal secret</button>
+                <button id="copy-secret" class="btn small" type="button">Copy</button>
               </div>
             </div>
           </div>
           <div class="row small" style="margin-top: 8px">
-            <button id="copy-uri" class="btn small">Copy otpauth URI</button>
+            <button id="copy-uri" class="btn small" type="button">Copy otpauth URI</button>
           </div>
         </div>
 
         <div class="panel">
-          <h3 style="margin: 0 0 10px">Code</h3>
+          <h3 id="code-heading" style="margin: 0 0 10px">Code</h3>
+          <p id="code-accessibility" class="sr-only">
+            Current one-time passcode. Updates every 30 seconds when revealed.
+          </p>
           <div class="code-wrap">
-            <div id="code" class="code mono">— — — — — —</div>
+            <div id="code" class="code mono" role="status" aria-live="off" aria-atomic="true"
+              aria-labelledby="code-heading code-accessibility" tabindex="0">— — — — — —</div>
             <div id="code-overlay" class="code-mask hidden" aria-hidden="true">
               Hidden code — select reveal
             </div>
           </div>
           <div id="countdown" class="muted small" style="text-align: center; margin-top: 6px"></div>
           <div class="row small" style="justify-content: center; margin-top: 8px; gap: 8px">
-            <button id="reveal-code" class="btn small hidden" type="button">Reveal Code</button>
+            <button id="reveal-code" class="btn small hidden" type="button" aria-controls="code"
+              aria-pressed="false">Reveal code</button>
             <button id="copy-code" class="btn small" type="button" disabled>Copy Code</button>
           </div>
         </div>
