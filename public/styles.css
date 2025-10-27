@@ -270,9 +270,18 @@ input[type='file'] {
 
 .secret {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
+}
+
+.secret-value {
   word-break: break-all;
+}
+
+.secret-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .code {
