@@ -457,6 +457,7 @@ input[type='text'].field-invalid {
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 500;
 }
 
 .toast.is-visible {
