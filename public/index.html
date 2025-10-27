@@ -22,9 +22,9 @@
     <div class="card">
       <h1>QR Decoder</h1>
       <p class="muted small">
-        A simple HTML application for decoding QR codes with <a
+        A simple HTML application for decoding QR codes locally. It prefers the native <a
           href="https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector" target="_blank"
-          rel="noopener">BarcodeDetector</a>.
+          rel="noopener">BarcodeDetector</a> API and falls back to an embedded decoder everywhere else.
       </p>
 
       <div class="grid" style="margin-top: 16px">
@@ -35,9 +35,6 @@
               <span id="bd-note" class="muted small"></span>
             </div>
             <input id="file" type="file" accept="image/*" />
-          </div>
-          <div id="support-warning" class="banner hidden" role="status">
-            Your browser cannot decode QR codes locally. Paste an otpauth URI below instead.
           </div>
           <div class="actions">
             <button id="open-camera" class="btn full" type="button">Scan with Camera</button>
@@ -63,6 +60,10 @@
           </div>
           <button id="reveal-preview" class="btn small hidden" type="button">Reveal QR</button>
         </div>
+      </div>
+
+      <div id="support-warning" class="banner hidden" role="status">
+        BarcodeDetector is unavailable. Falling back to a portable decoder — scans may be slower.
       </div>
 
       <div class="cols" style="margin-top: 18px">

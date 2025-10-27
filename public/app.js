@@ -38,6 +38,44 @@ let toastTimer = null;
 let toastHideTimer = null;
 let cameraStream = null;
 let cameraModalVisible = false;
+let barcodeDetectorAvailable = false;
+let fallbackDecoderPromise = null;
+
+const FALLBACK_DECODER_URL = '/vendor/jsqr@1.4.0.js';
+
+function loadFallbackDecoder() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+  if (fallbackDecoderPromise) return fallbackDecoderPromise;
+  fallbackDecoderPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(
+      `script[data-decoder="${FALLBACK_DECODER_URL}"]`
+    );
+    if (existing) {
+      existing.addEventListener('load', () => {
+        if (window.jsQR) resolve(window.jsQR);
+        else reject(new Error('QR fallback failed to load'));
+      });
+      existing.addEventListener('error', () =>
+        reject(new Error('QR fallback failed to load'))
+      );
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = FALLBACK_DECODER_URL;
+    script.async = true;
+    script.setAttribute('data-decoder', FALLBACK_DECODER_URL);
+    script.onload = () => {
+      if (window.jsQR) resolve(window.jsQR);
+      else reject(new Error('QR fallback failed to load'));
+    };
+    script.onerror = () => reject(new Error('QR fallback failed to load'));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    fallbackDecoderPromise = null;
+    throw error;
+  });
+  return fallbackDecoderPromise;
+}
 
 function showToast(message, duration = 2200) {
   if (!toast || !message) return;
@@ -104,10 +142,6 @@ function stopCameraStream() {
 
 async function openCamera() {
   if (!openCameraBtn) return;
-  if (!fileUploadEnabled) {
-    setStatus('Camera capture requires built-in QR support');
-    return;
-  }
   if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
     setStatus('Camera not supported in this browser');
     return;
@@ -261,56 +295,63 @@ function updateCodeVisibility() {
     }
   }
 
-  fileUploadEnabled = hasBD;
+  barcodeDetectorAvailable = hasBD;
+  fileUploadEnabled = true;
 
   if (bdNote) {
-    bdNote.textContent = hasBD
-      ? '(or drag & drop)'
-      : 'Local decoding unavailable';
+    bdNote.textContent = '(or drag & drop)';
+  }
+
+  fileInput.disabled = false;
+  fileInput.removeAttribute('tabindex');
+  dropZone?.classList.remove('drop-disabled');
+  dropZone?.removeAttribute('aria-disabled');
+  uploadRow?.classList.remove('hidden');
+  previewContainer?.classList.remove('hidden');
+  previewGroup?.classList.remove('hidden');
+
+  if (supportWarning && !hasBD) {
+    supportWarning.textContent =
+      'BarcodeDetector is unavailable. Falling back to an embedded decoder — scans may take a little longer.';
+    supportWarning.classList.toggle('hidden', hasBD);
   }
 
   updateCameraAvailability();
 
-  if (hasBD) {
-    fileInput.disabled = false;
-    fileInput.removeAttribute('tabindex');
-    dropZone?.classList.remove('drop-disabled');
-    dropZone?.removeAttribute('aria-disabled');
-    uploadRow?.classList.remove('hidden');
-    previewContainer?.classList.remove('hidden');
-    previewGroup?.classList.remove('hidden');
-    supportWarning?.classList.add('hidden');
-    setStatus('Drop a QR, scan with camera, or paste a URI to begin!');
-  } else {
-    fileInput.disabled = true;
-    fileInput.setAttribute('tabindex', '-1');
-    fileInput.value = '';
-    dropZone?.classList.add('drop-disabled');
-    dropZone?.setAttribute('aria-disabled', 'true');
-    uploadRow?.classList.add('hidden');
-    previewContainer?.classList.add('hidden');
-    previewGroup?.classList.add('hidden');
-    supportWarning?.classList.remove('hidden');
-    setStatus('Paste an otpauth URI to begin!');
-    clearPreview();
-  }
+  setStatus('Drop a QR, scan with camera, or paste a URI to begin!');
 
   updatePreviewVisibility();
   updateCodeVisibility();
 })();
 
 async function decodeQRFromImage(imgBlob) {
-  if (!('BarcodeDetector' in window))
-    throw new Error('BarcodeDetector not supported');
-  const detector = new BarcodeDetector({ formats: ['qr_code'] });
   const bitmap = await createImageBitmap(await imgBlob);
   const cnv = document.createElement('canvas');
   cnv.width = bitmap.width;
   cnv.height = bitmap.height;
-  cnv.getContext('2d').drawImage(bitmap, 0, 0);
-  const barcodes = await detector.detect(cnv);
-  if (!barcodes.length) throw new Error('No QR code found');
-  return barcodes[0].rawValue;
+  const ctx = cnv.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Unable to prepare image for decoding');
+  ctx.drawImage(bitmap, 0, 0);
+
+  if (barcodeDetectorAvailable && 'BarcodeDetector' in window) {
+    try {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      const barcodes = await detector.detect(cnv);
+      if (barcodes.length && barcodes[0]?.rawValue) {
+        return barcodes[0].rawValue;
+      }
+    } catch (err) {
+      console.warn('BarcodeDetector failed, falling back to jsQR.', err);
+    }
+  }
+
+  const imageData = ctx.getImageData(0, 0, cnv.width, cnv.height);
+  const jsQR = await loadFallbackDecoder();
+  const result = jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: 'attemptBoth',
+  });
+  if (!result || !result.data) throw new Error('No QR code found');
+  return result.data;
 }
 
 function parseOtpAuth(uri) {

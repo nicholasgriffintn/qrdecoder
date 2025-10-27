@@ -6,13 +6,14 @@ const CORE_ASSETS = [
   '/index.html',
   '/styles.css',
   '/app.js',
+  '/vendor/jsqr@1.4.0.js',
   '/site.webmanifest',
   '/favicon.svg',
   '/favicon.ico',
   '/favicon-96x96.png',
   '/apple-touch-icon.png',
   '/web-app-manifest-192x192.png',
-  '/web-app-manifest-512x512.png'
+  '/web-app-manifest-512x512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -44,12 +45,11 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
-    );
+    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
     return;
   }
 
@@ -58,7 +58,11 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          if (
+            !response ||
+            response.status !== 200 ||
+            response.type !== 'basic'
+          ) {
             return response;
           }
           const clone = response.clone();
@@ -69,7 +73,10 @@ self.addEventListener('fetch', (event) => {
           if (request.destination === 'document') {
             return caches.match('/index.html');
           }
-          return new Response('', { status: 503, statusText: 'Service Unavailable' });
+          return new Response('', {
+            status: 503,
+            statusText: 'Service Unavailable',
+          });
         });
     })
   );
