@@ -5,178 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>QR Decoder</title>
-  <style>
-    :root {
-      --bg: #0b0b10;
-      --panel: #13131a;
-      --muted: #8b8ca3;
-      --text: #e7e7f0;
-      --accent: #7c8cff;
-      --border: #272833;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      height: 100%;
-    }
-
-    body {
-      margin: 0;
-      background: linear-gradient(180deg, #0b0b10, #0e0e14);
-      color: var(--text);
-      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Ubuntu,
-        sans-serif;
-    }
-
-    .wrap {
-      min-height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-    }
-
-    .card {
-      width: min(960px, 100%);
-      background: color-mix(in oklab, var(--panel) 90%, #000);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 24px 24px 28px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-      letter-spacing: -0.01em;
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    @media (min-width: 880px) {
-      .grid {
-        grid-template-columns: 1.2fr 0.8fr;
-      }
-    }
-
-    .drop {
-      border: 1px dashed var(--border);
-      border-radius: 18px;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    button,
-    .btn {
-      appearance: none;
-      border: 1px solid var(--border);
-      background: #1a1b24;
-      color: var(--text);
-      padding: 10px 14px;
-      border-radius: 12px;
-      cursor: pointer;
-    }
-
-    button:hover,
-    .btn:hover {
-      border-color: #3a3b4e;
-    }
-
-    input[type='text'],
-    input[type='file'] {
-      width: 100%;
-      border: 1px solid var(--border);
-      background: #0f1016;
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-    }
-
-    .preview {
-      width: 160px;
-      height: 160px;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0f1016;
-      overflow: hidden;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .label {
-      font-size: 11px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
-        'Liberation Mono', monospace;
-    }
-
-    .cols {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    @media (min-width: 880px) {
-      .cols {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .panel {
-      border: 1px solid var(--border);
-      background: #12131b;
-      border-radius: 18px;
-      padding: 16px;
-    }
-
-    .secret {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      word-break: break-all;
-    }
-
-    .code {
-      font-size: 48px;
-      text-align: center;
-      font-weight: 700;
-    }
-
-    .small {
-      font-size: 13px;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
@@ -184,16 +13,24 @@
     <div class="card">
       <h1>QR Decoder</h1>
       <p class="muted small">
-        A simple HTML5 application for decoding QR codes.
+        A simple HTML application for decoding QR codes with <a
+          href="https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector" target="_blank"
+          rel="noopener">BarcodeDetector</a>.
       </p>
+      <div id="support-warning" class="banner hidden" role="status">
+        Your browser cannot decode QR codes locally. Paste an otpauth URI below instead.
+      </div>
 
       <div class="grid" style="margin-top: 16px">
         <div class="drop" id="drop">
-          <div class="row">
+          <div class="row" id="upload-row">
             <input id="file" type="file" accept="image/*" />
             <span class="muted small">or drag & drop an image with a QR code</span>
             <span id="bd-note" class="muted small" style="margin-left: auto"></span>
           </div>
+          <p id="no-upload" class="muted small hidden" style="margin-top: 8px">
+            QR decoding isn&rsquo;t available in this browser. Paste an otpauth URI instead.
+          </p>
           <div class="row" style="margin-top: 12px">
             <div class="field" style="flex: 1">
               <div class="label">Or paste an otpauth URI</div>
@@ -206,7 +43,7 @@
             Drop a QR or paste a URI
           </p>
         </div>
-        <div class="preview">
+        <div class="preview" id="preview-container">
           <img id="preview" alt="preview" style="max-width: 100%; max-height: 100%; display: none" />
         </div>
       </div>
@@ -268,265 +105,7 @@
     </div>
   </div>
 
-  <script>
-    // ---- helpers: notifications
-    const $ = (id) => document.getElementById(id);
-    const statusEl = $('status');
-    function setStatus(t) {
-      statusEl.textContent = t;
-    }
-    function note(el, t) {
-      el.textContent = t;
-      setTimeout(() => {
-        el.textContent = '';
-      }, 1200);
-    }
-
-    // ---- feature note
-    (async function () {
-      const hasBD =
-        'BarcodeDetector' in window &&
-        ((await BarcodeDetector.getSupportedFormats?.()) || []).includes(
-          'qr_code'
-        );
-      $('bd-note').textContent = hasBD
-        ? 'Built-in QR decode available'
-        : 'No built-in QR: paste URI';
-    })();
-
-    // ---- QR decode (built-in only; keeps file entirely local)
-    async function decodeQRFromImage(imgBlob) {
-      if (!('BarcodeDetector' in window))
-        throw new Error('BarcodeDetector not supported');
-      const detector = new BarcodeDetector({ formats: ['qr_code'] });
-      const bitmap = await createImageBitmap(await imgBlob);
-      const cnv = document.createElement('canvas');
-      cnv.width = bitmap.width;
-      cnv.height = bitmap.height;
-      cnv.getContext('2d').drawImage(bitmap, 0, 0);
-      const barcodes = await detector.detect(cnv);
-      if (!barcodes.length) throw new Error('No QR code found');
-      return barcodes[0].rawValue;
-    }
-
-    // ---- otpauth parsing + Base32
-    function parseOtpAuth(uri) {
-      try {
-        const u = new URL(uri);
-        if (u.protocol !== 'otpauth:')
-          throw new Error('Not an otpauth:// URI');
-        const type = u.hostname.toUpperCase(); // totp or hotp
-        const label = decodeURIComponent(u.pathname.replace(/^\//, ''));
-        const issuer = u.searchParams.get('issuer') || '';
-        const secretB32 = (u.searchParams.get('secret') || '')
-          .replace(/\s+/g, '')
-          .toUpperCase();
-        const algo = (
-          u.searchParams.get('algorithm') || 'SHA1'
-        ).toUpperCase();
-        const digits = parseInt(u.searchParams.get('digits') || '6', 10);
-        const period =
-          type === 'TOTP'
-            ? parseInt(u.searchParams.get('period') || '30', 10)
-            : null;
-        const counter =
-          type === 'HOTP'
-            ? parseInt(u.searchParams.get('counter') || '0', 10)
-            : null;
-        if (!secretB32) throw new Error('Missing secret');
-        return {
-          type,
-          label,
-          issuer,
-          secretB32,
-          algo,
-          digits,
-          period,
-          counter,
-          original: uri,
-        };
-      } catch (e) {
-        return { error: e.message };
-      }
-    }
-
-    // RFC 4648 base32 decode → Uint8Array
-    function base32ToBytes(b32) {
-      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-      const clean = b32.replace(/=+$/, '');
-      let bits = '';
-      for (const ch of clean) {
-        const idx = alphabet.indexOf(ch);
-        if (idx < 0) throw new Error('Invalid base32');
-        bits += idx.toString(2).padStart(5, '0');
-      }
-      const bytes = [];
-      for (let i = 0; i + 8 <= bits.length; i += 8) {
-        bytes.push(parseInt(bits.slice(i, i + 8), 2));
-      }
-      return new Uint8Array(bytes);
-    }
-
-    // ---- TOTP/HOTP generation using WebCrypto
-    async function hmac(algo, keyBytes, msgBytes) {
-      const subtleAlgo = { name: 'HMAC', hash: { name: algo } };
-      const key = await crypto.subtle.importKey(
-        'raw',
-        keyBytes,
-        subtleAlgo,
-        false,
-        ['sign']
-      );
-      return new Uint8Array(await crypto.subtle.sign('HMAC', key, msgBytes));
-    }
-    function intToBytesBE(num) {
-      const buf = new ArrayBuffer(8);
-      const view = new DataView(buf);
-      const hi = Math.floor(num / 2 ** 32);
-      const lo = num >>> 0;
-      view.setUint32(0, hi);
-      view.setUint32(4, lo);
-      return new Uint8Array(buf);
-    }
-    function dtToCounter(period) {
-      return Math.floor(Date.now() / 1000 / period) >>> 0;
-    }
-    function truncateCode(hmacBytes) {
-      const offset = hmacBytes[hmacBytes.length - 1] & 0x0f;
-      const p =
-        ((hmacBytes[offset] & 0x7f) << 24) |
-        ((hmacBytes[offset + 1] & 0xff) << 16) |
-        ((hmacBytes[offset + 2] & 0xff) << 8) |
-        (hmacBytes[offset + 3] & 0xff);
-      return p >>> 0;
-    }
-    async function generateOTP({
-      type,
-      secretB32,
-      algo,
-      digits,
-      period,
-      counter,
-    }) {
-      const algoMap = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512' };
-      const hash = algoMap[algo] || 'SHA-1';
-      const key = base32ToBytes(secretB32);
-      const ctr = type === 'TOTP' ? dtToCounter(period) : counter || 0;
-      const msg = intToBytesBE(ctr);
-      const mac = await hmac(hash, key, msg);
-      const bin = truncateCode(mac);
-      const mod = 10 ** (digits || 6);
-      return String(bin % mod).padStart(digits || 6, '0');
-    }
-
-    // ---- UI glue
-    let parsed = null;
-    let showSecret = false;
-    let timer = null;
-    const img = $('preview');
-
-    function render() {
-      $('type').textContent = parsed?.type || '—';
-      $('label').textContent = parsed?.label || '—';
-      $('issuer').textContent = parsed?.issuer || '—';
-      $('algo').textContent = parsed?.algo || '—';
-      $('digits').textContent = parsed?.digits ?? '—';
-      $('period').textContent = parsed?.type === 'TOTP' ? parsed.period : '—';
-      $('counter').textContent =
-        parsed?.type === 'HOTP' ? parsed.counter : '—';
-      $('secret').textContent = parsed
-        ? showSecret
-          ? parsed.secretB32
-          : '•'.repeat(Math.min(parsed.secretB32.length, 24))
-        : '—';
-    }
-
-    async function refreshCodeLoop() {
-      clearInterval(timer);
-      $('code').textContent = '— — — — — —';
-      $('countdown').textContent = '';
-      if (!parsed) return;
-      const update = async () => {
-        const code = await generateOTP(parsed).catch(() => null);
-        $('code').textContent = code || '———';
-        if (parsed.type === 'TOTP') {
-          const left =
-            parsed.period - (Math.floor(Date.now() / 1000) % parsed.period);
-          $('countdown').textContent = `Refreshes in ${left}s`;
-        }
-      };
-      await update();
-      timer = setInterval(update, 1000);
-    }
-
-    // File input / drag
-    $('file').addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      img.src = url;
-      img.style.display = 'block';
-      setStatus('Decoding QR…');
-      try {
-        const text = await decodeQRFromImage(file);
-        if (!text.startsWith('otpauth://'))
-          throw new Error('QR is not an otpauth URI');
-        parsed = parseOtpAuth(text);
-        if (parsed.error) throw new Error(parsed.error);
-        setStatus('QR decoded ✔');
-        render();
-        refreshCodeLoop();
-      } catch (err) {
-        setStatus(err.message || 'Failed to decode');
-        parsed = null;
-        render();
-        refreshCodeLoop();
-      }
-    });
-
-    // Paste / parse
-    $('parse').addEventListener('click', () => {
-      const v = $('uri').value.trim();
-      if (!v) return;
-      const p = parseOtpAuth(v);
-      if (p.error) {
-        setStatus(p.error);
-        parsed = null;
-        render();
-        refreshCodeLoop();
-        return;
-      }
-      parsed = p;
-      setStatus('URI parsed ✔');
-      img.style.display = 'none';
-      render();
-      refreshCodeLoop();
-    });
-
-    // Copy buttons
-    $('copy-secret').addEventListener('click', async () => {
-      if (!parsed) return;
-      await navigator.clipboard.writeText(parsed.secretB32 || '');
-      note($('copied-note'), 'Secret copied');
-    });
-    $('copy-uri').addEventListener('click', async () => {
-      if (!parsed) return;
-      await navigator.clipboard.writeText(parsed.original || '');
-      note($('copied-note'), 'URI copied');
-    });
-    $('copy-code').addEventListener('click', async () => {
-      const t = $('code').textContent.trim();
-      if (!t || t.includes('—')) return;
-      await navigator.clipboard.writeText(t);
-      note($('copied-note'), 'Code copied');
-    });
-    $('reveal').addEventListener('click', () => {
-      showSecret = !showSecret;
-      render();
-    });
-
-    render();
-  </script>
+  <script src="app.js" defer></script>
 </body>
 
 </html>
